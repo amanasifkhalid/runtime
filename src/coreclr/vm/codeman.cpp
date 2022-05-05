@@ -5808,7 +5808,7 @@ GCInfoToken ReadyToRunJitManager::GetGCInfoToken(const METHODTOKEN& MethodToken)
     SIZE_T nUnwindDataSize;
     PTR_VOID pUnwindData = GetUnwindDataBlob(baseAddress, pRuntimeFunction, &nUnwindDataSize);
 
-    // GCInfo immediatelly follows unwind data
+    // GCInfo immediately follows unwind data
     PTR_BYTE gcInfo = dac_cast<PTR_BYTE>(pUnwindData) + nUnwindDataSize;
     UINT32 gcInfoVersion = JitTokenToGCInfoVersion(MethodToken);
 
@@ -6051,8 +6051,6 @@ BOOL ReadyToRunJitManager::JitCodeToMethodInfo(RangeSection * pRangeSection,
         SUPPORTS_DAC;
     } CONTRACTL_END;
 
-    // READYTORUN: FUTURE: Hot-cold spliting
-
     // If the address is in a thunk, return NULL.
     if (GetStubCodeBlockKind(pRangeSection, currentPC) != STUB_CODE_BLOCK_UNKNOWN)
     {
@@ -6090,7 +6088,11 @@ BOOL ReadyToRunJitManager::JitCodeToMethodInfo(RangeSection * pRangeSection,
 #ifdef FEATURE_EH_FUNCLETS
     // Save the raw entry
     PTR_RUNTIME_FUNCTION RawFunctionEntry = pRuntimeFunctions + MethodIndex;
-
+    //
+    // AndrewAu - (N) This is wrong if we have hot-cold splitting
+    //                At this point, we have a method index of the cold code
+    //                And we need to get back to the entry point
+    //
     MethodDesc *pMethodDesc;
     while ((pMethodDesc = pInfo->GetMethodDescForEntryPoint(ImageBase + RUNTIME_FUNCTION__BeginAddress(pRuntimeFunctions + MethodIndex))) == NULL)
         MethodIndex--;
@@ -6149,7 +6151,7 @@ TADDR ReadyToRunJitManager::GetFuncletStartAddress(EECodeInfo * pCodeInfo)
 {
     LIMITED_METHOD_DAC_CONTRACT;
 
-    // READYTORUN: FUTURE: Hot-cold spliting
+    // AndrewAu - (N) I am not sure what's wrong with this if we have hot-cold splitting in ReadyToRun.
 
     return IJitManager::GetFuncletStartAddress(pCodeInfo);
 }
@@ -6168,11 +6170,14 @@ DWORD ReadyToRunJitManager::GetFuncletStartOffsets(const METHODTOKEN& MethodToke
     // of the first hot funclet, because GetFuncletStartOffsetsHelper() will skip all the function
     // fragments until the first funclet, if any, is found.
 
+    //
+    // AndrewAu - (N) Once we have the cold code start address and size computed by JitTokenToMethodRegionInfo
+    //                This will need to change such that we enumerate the funclets in the cold code as well.
+    //
+
     GetFuncletStartOffsetsHelper(regionInfo.hotStartAddress, regionInfo.hotSize, 0,
         pFirstFuncletFunctionEntry, moduleBase,
         &nFunclets, pStartFuncletOffsets, dwLength);
-
-    // READYTORUN: FUTURE: Hot/cold splitting
 
     return nFunclets;
 }
@@ -6228,8 +6233,23 @@ void ReadyToRunJitManager::JitTokenToMethodRegionInfo(const METHODTOKEN& MethodT
         PRECONDITION(methodRegionInfo != NULL);
     } CONTRACTL_END;
 
-    // READYTORUN: FUTURE: Hot-cold spliting
-
+    //
+    // AndrewAu - (N) This is obviously wrong if we have hot-cold splitting
+    //
+    //                Given a JitToken, we can access:
+    //                - StartAddress
+    //                - ReadyToRunInfo
+    //                - ModuleBase
+    //                - UnwindInfo
+    //                - GCInfo
+    //
+    //                Nothing seems to give out the cold code size
+    //                We do need an additional data to get that info
+    //
+    //                Cheating a bit - it appears the implementation of fragile
+    //                NGen involves binary searching some additional data
+    //                We might want to follow a similar approach there
+    //
     methodRegionInfo->hotStartAddress  = JitTokenToStartAddress(MethodToken);
     methodRegionInfo->hotSize          = GetCodeManager()->GetFunctionSize(GetGCInfoToken(MethodToken));
     methodRegionInfo->coldStartAddress = 0;
