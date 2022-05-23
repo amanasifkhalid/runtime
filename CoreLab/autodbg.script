@@ -1,0 +1,5 @@
+.load C:\dev\diagnostics\artifacts\bin\Windows_NT.x64.Debug\sos.dll
+sxe ld coreclr
+g
+!do 0
+bm coreclr!*andrew_break

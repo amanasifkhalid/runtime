@@ -127,6 +127,11 @@ namespace ILCompiler.DependencyAnalysis.ReadyToRun
             for (int frameInfoIndex = 0; frameInfoIndex < _methodNode.FrameInfos.Length; frameInfoIndex++)
             {
                 byte[] unwindInfo = _methodNode.FrameInfos[frameInfoIndex].BlobData;
+                if (unwindInfo.Length == 0)
+                {
+                    // Unwinding is known to be somewhat broken.
+                    continue;
+                }
 
                 if (targetArch == TargetArchitecture.X64)
                 {

@@ -465,7 +465,8 @@ namespace Internal.JitInterface
 
             try
             {
-                if (!ShouldSkipCompilation(MethodBeingCompiled) && !MethodSignatureIsUnstable(MethodBeingCompiled.Signature, out var _))
+                // This method is known to perform a hot cold splitting in the JIT.
+                if (methodCodeNodeNeedingCode.ToString().Equals("[S.P.CoreLib]System.Convert.FromHexString(string)"))
                 {
                     MethodIL methodIL = _compilation.GetMethodIL(MethodBeingCompiled);
 

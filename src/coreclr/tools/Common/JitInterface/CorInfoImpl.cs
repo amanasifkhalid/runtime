@@ -36,49 +36,43 @@ using Internal.Text;
 namespace Internal.JitInterface
 {
 #if READYTORUN
-    //
-    // AndrewAu - (3) I tried to be as simple as possible, so I followed
-    //                MethodReadOnlyDataNode, to start with, I just 
-    //                throw NotImplementedException for all the abstract
-    //                or interface methods.
-    //
-    //                Obviously, eventually, we will have to implement them.
-    //
-    internal class MethodColdCodeNode : ObjectNode, ISymbolNode
+    internal class MethodColdCodeNode : ObjectNode, ISymbolDefinitionNode
     {
-        //
-        // AndrewAu - (5) This is introduced in step 5
-        //
         private ObjectData _methodColdCode;
+        private MethodDesc _owningMethod;
 
-        public int Offset => throw new NotImplementedException();
+        public MethodColdCodeNode(MethodDesc owningMethod)
+        {
+            _owningMethod = owningMethod;
+        }
 
-        public override ObjectNodeSection Section => throw new NotImplementedException();
+        public int Offset => 0;
 
-        public override bool IsShareable => throw new NotImplementedException();
+        public override ObjectNodeSection Section
+        {
+            get
+            {
+                // TODO, Unix
+                return ObjectNodeSection.ManagedCodeWindowsContentSection;
+            }
+        }
 
-        public override int ClassCode => throw new NotImplementedException();
+        public override bool IsShareable => false;
 
-        //
-        // AndrewAu - (5) Eventually, the dependency engine will get to this node because it is a reloc
-        //                Following the pattern of MethodWithGCInfo, I introduced _methodColdCode and 
-        //                the following implementation of this method.
-        //
+        // This ClassCode must be larger than that of MethodCodeNode to ensure it got sorted at the end of the code
+        public override int ClassCode => 788492408;
+
         public override bool StaticDependenciesAreComputed => _methodColdCode != null;
 
-        //
-        // AndrewAu - (7) This is the end of the prototype, the next crash happened within the JIT hitting some assertion.
-        //
-        public void AppendMangledName(NameMangler nameMangler, Utf8StringBuilder sb) => throw new NotImplementedException();
+        public void AppendMangledName(NameMangler nameMangler, Utf8StringBuilder sb)
+        {
+            sb.Append("__coldcode_" + nameMangler.GetMangledMethodName(_owningMethod));
+        }
 
-        public override ObjectData GetData(NodeFactory factory, bool relocsOnly = false) => throw new NotImplementedException();
+        public override ObjectData GetData(NodeFactory factory, bool relocsOnly = false) => _methodColdCode;
 
         protected override string GetName(NodeFactory context) => throw new NotImplementedException();
 
-        //
-        // AndrewAu - (6) Introducing _methodColdCode alone won't work since it will always be null, here 
-        //                is how we are going to set it.
-        //
         public void SetCode(ObjectData data)
         {
             Debug.Assert(_methodColdCode == null);
@@ -482,19 +476,13 @@ namespace Internal.JitInterface
 #if READYTORUN
             if (_methodColdCodeNode != null)
             {
-                //
-                // AndrewAu - (6) After using the SetCode method, we will need to call it
-                //                This code seems reasonable and set the cold code, the relocation is 
-                //                unclear at the time of writing
-                //
+                // TODO, Study how this work.
+                var relocs2 = _coldCodeRelocs.ToArray();
+                Array.Sort(relocs2, (x, y) => (x.Offset - y.Offset));
                 var coldObjectData = new ObjectNode.ObjectData(_coldCode,
-                    Array.Empty<Relocation>(),
+                    relocs2,
                     alignment,
-                    //
-                    // AndrewAu - Note, we may want to implement ISymbolDefinitionNode instead of ISymbolNode
-                    //            for _methodColdCodeNode.
-                    //
-                    new ISymbolDefinitionNode[] { _methodCodeNode });
+                    new ISymbolDefinitionNode[] { _methodColdCodeNode });
                 _methodColdCodeNode.SetCode(coldObjectData);
             }
 #endif
@@ -627,7 +615,9 @@ namespace Internal.JitInterface
 
             _codeRelocs = new ArrayBuilder<Relocation>();
             _roDataRelocs = new ArrayBuilder<Relocation>();
-
+#if READYTORUN
+            _coldCodeRelocs = new ArrayBuilder<Relocation>();
+#endif
             _numFrameInfos = 0;
             _usedFrameInfos = 0;
             _frameInfos = null;
@@ -3450,17 +3440,7 @@ namespace Internal.JitInterface
             {
 
 #if READYTORUN
-                //
-                // AndrewAu - (4) Step 3 only introduced a class, we never instantiated it
-                //            so that is always null, not great.
-                //
-                //            Eventually, that will fail in the dependency layer where
-                //            we discovered a reloc is a null node.
-                //
-                //            Hunting around in the code, it looks like this is the right spot
-                //            to instantiate it.
-                //
-                this._methodColdCodeNode = new MethodColdCodeNode();
+                this._methodColdCodeNode = new MethodColdCodeNode(MethodBeingCompiled);
 #endif
                 args.coldCodeBlock = (void*)GetPin(_coldCode = new byte[args.coldCodeSize]);
                 args.coldCodeBlockRW = args.coldCodeBlock;
@@ -3576,7 +3556,9 @@ namespace Internal.JitInterface
 
         private ArrayBuilder<Relocation> _codeRelocs;
         private ArrayBuilder<Relocation> _roDataRelocs;
-
+#if READYTORUN
+        private ArrayBuilder<Relocation> _coldCodeRelocs;
+#endif
 
         /// <summary>
         /// Various type of block.
@@ -3656,15 +3638,8 @@ namespace Internal.JitInterface
                     return ref _roDataRelocs;
 #if READYTORUN
                 case BlockType.ColdCode:
-                    //
-                    // AndrewAu - (?) I forgot when I hit this, but this code is also necessary
-                    //                to avoid a crash.
-                    //
-                    //                This is also obviously wrong, at the time of writing, not
-                    //                sure what to do with this yet.
-                    //
-                    length = 0;
-                    return ref _roDataRelocs;
+                    length = _coldCode.Length;
+                    return ref _coldCodeRelocs;
 #endif
                 default:
                     throw new NotImplementedException("Arbitrary relocs");

@@ -142,7 +142,9 @@ namespace ILCompiler.Reflection.ReadyToRun.Amd64
                     }
                     break;
                 default:
-                    throw new NotImplementedException(UnwindOp.ToString());
+                    // Unwinding is known to be somewhat broken
+                    // throw new NotImplementedException(UnwindOp.ToString());
+                    break;
             }
 
             NextFrameOffset = frameOffset;
