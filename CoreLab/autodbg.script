@@ -2,4 +2,8 @@
 sxe ld coreclr
 g
 !do 0
-bm coreclr!*andrew_break
+.echo Stop when the OS try to unwind from the cold code
+bp /w "FunctionEntry->BeginAddress == 0x00497800" ntdll!RtlpUnwindPrologue+0x1e
+g
+.echo The OS stack walker is operating right now!
+k

@@ -634,17 +634,16 @@ namespace R2RDump
 
         public static int Main(string[] args)
         {
+/*
             //
             // AndrewAu - A convenient way to make sure I have time 
             // to attach a debugger on startup
-            //
-            // Writing this code is so much easier with crossgen2.sln
-            // Remember to change target to x64
             //
             while (!System.Diagnostics.Debugger.IsAttached)
             {
             }
             System.Diagnostics.Debugger.Break();
+*/
             return new CommandLineBuilder(new R2RDumpRootCommand())
                     .UseHelp()
                     .UseParseErrorReporting()

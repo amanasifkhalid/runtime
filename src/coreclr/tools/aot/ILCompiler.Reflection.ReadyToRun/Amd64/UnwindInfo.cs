@@ -59,7 +59,7 @@ namespace ILCompiler.Reflection.ReadyToRun.Amd64
         public UnwindCode() { }
 
         /// <summary>
-        /// Unwinde code parsing is based on <a href="https://github.com/dotnet/coreclr/blob/master/src/jit/unwindamd64.cpp">src\jit\unwindamd64.cpp</a> DumpUnwindInfo
+        /// Unwind code parsing is based on <a href="https://github.com/dotnet/coreclr/blob/master/src/jit/unwindamd64.cpp">src\jit\unwindamd64.cpp</a> DumpUnwindInfo
         /// </summary>
         public UnwindCode(byte[] image, ref int frameOffset, ref int offset)
         {
@@ -142,9 +142,7 @@ namespace ILCompiler.Reflection.ReadyToRun.Amd64
                     }
                     break;
                 default:
-                    // Unwinding is known to be somewhat broken
-                    // throw new NotImplementedException(UnwindOp.ToString());
-                    break;
+                    throw new NotImplementedException(UnwindOp.ToString());
             }
 
             NextFrameOffset = frameOffset;

@@ -583,8 +583,7 @@ namespace ILCompiler.Reflection.ReadyToRun
                 }
                 else if (_readyToRunReader.Machine == Machine.Amd64)
                 {
-                    // Unwinding is known to be somewhat broken
-                    // unwindInfo = new Amd64.UnwindInfo(_readyToRunReader.Image, unwindOffset);
+                    unwindInfo = new Amd64.UnwindInfo(_readyToRunReader.Image, unwindOffset);
                 }
                 else if (_readyToRunReader.Machine == Machine.ArmThumb2)
                 {

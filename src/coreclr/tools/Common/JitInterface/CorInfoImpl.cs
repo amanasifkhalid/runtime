@@ -36,7 +36,7 @@ using Internal.Text;
 namespace Internal.JitInterface
 {
 #if READYTORUN
-    internal class MethodColdCodeNode : ObjectNode, ISymbolDefinitionNode
+    public class MethodColdCodeNode : ObjectNode, ISymbolDefinitionNode
     {
         private ObjectData _methodColdCode;
         private MethodDesc _owningMethod;
@@ -77,6 +77,11 @@ namespace Internal.JitInterface
         {
             Debug.Assert(_methodColdCode == null);
             _methodColdCode = data;
+        }
+
+        public int GetColdCodeSize()
+        {
+            return _methodColdCode.Data.Length;
         }
     }
 #endif
@@ -484,6 +489,7 @@ namespace Internal.JitInterface
                     alignment,
                     new ISymbolDefinitionNode[] { _methodColdCodeNode });
                 _methodColdCodeNode.SetCode(coldObjectData);
+                _methodCodeNode.SetColdCodeNode(_methodColdCodeNode);
             }
 #endif
 
@@ -3489,7 +3495,10 @@ namespace Internal.JitInterface
 
         private void reserveUnwindInfo(bool isFunclet, bool isColdCode, uint unwindSize)
         {
-            _numFrameInfos++;
+            if (!isColdCode)
+            {
+                _numFrameInfos++;
+            }
         }
 
         private void allocUnwindInfo(byte* pHotCode, byte* pColdCode, uint startOffset, uint endOffset, uint unwindSize, byte* pUnwindBlock, CorJitFuncKind funcKind)
@@ -3521,7 +3530,10 @@ namespace Internal.JitInterface
             }
 #endif
 
-            _frameInfos[_usedFrameInfos++] = new FrameInfo(flags, (int)startOffset, (int)endOffset, blobData);
+            if (blobData.Length > 0)
+            {
+                _frameInfos[_usedFrameInfos++] = new FrameInfo(flags, (int)startOffset, (int)endOffset, blobData);
+            }
         }
 
         private void* allocGCInfo(UIntPtr size)

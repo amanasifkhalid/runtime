@@ -4,7 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-
+using System.Reflection.Metadata.Ecma335;
 using Internal.JitInterface;
 using Internal.Text;
 using Internal.TypeSystem;
@@ -19,6 +19,9 @@ namespace ILCompiler.DependencyAnalysis.ReadyToRun
         private readonly MethodDesc _method;
 
         private ObjectData _methodCode;
+#if READYTORUN
+        private MethodColdCodeNode _methodColdCodeNode;
+#endif
         private FrameInfo[] _frameInfos;
         private byte[] _gcInfo;
         private ObjectData _ehInfo;
@@ -129,6 +132,7 @@ namespace ILCompiler.DependencyAnalysis.ReadyToRun
             }
         }
 
+        public MethodColdCodeNode GetColdCodeNode() => _methodColdCodeNode;
 
         public byte[] GetFixupBlob(NodeFactory factory)
         {
@@ -358,5 +362,12 @@ namespace ILCompiler.DependencyAnalysis.ReadyToRun
         public override bool ShouldSkipEmittingObjectNode(NodeFactory factory) => IsEmpty;
 
         public override string ToString() => _method.ToString();
+
+#if READYTORUN
+        public void SetColdCodeNode(MethodColdCodeNode methodColdCodeNode)
+        {
+            _methodColdCodeNode = methodColdCodeNode;
+        }
+#endif
     }
 }

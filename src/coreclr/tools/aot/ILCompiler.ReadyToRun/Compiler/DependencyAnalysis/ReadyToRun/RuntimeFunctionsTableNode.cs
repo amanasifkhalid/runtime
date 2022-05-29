@@ -96,6 +96,33 @@ namespace ILCompiler.DependencyAnalysis.ReadyToRun
                     runtimeFunctionsBuilder.EmitReloc(factory.RuntimeFunctionsGCInfo.StartSymbol, RelocType.IMAGE_REL_BASED_ADDR32NB, funcletOffsets[frameIndex]);
                 }
             }
+#if READYTORUN
+            // Emitting a RuntimeFunction entry for cold code
+            foreach (MethodWithGCInfo method in _methodNodes)
+            {
+                // TODO: Proper namespace?
+                Internal.JitInterface.MethodColdCodeNode methodColdCodeNode = method.GetColdCodeNode();
+                if (methodColdCodeNode != null)
+                {
+                    int[] funcletOffsets = method.GCInfoNode.CalculateFuncletOffsets(factory);
+                    // TODO: Avoid code duplication
+                    // StartOffset of the runtime function
+                    int codeDelta = 0;
+                    if (Target.Architecture == TargetArchitecture.ARM)
+                    {
+                        // THUMB_CODE
+                        codeDelta = 1;
+                    }
+                    runtimeFunctionsBuilder.EmitReloc(methodColdCodeNode, RelocType.IMAGE_REL_BASED_ADDR32NB, delta: codeDelta);
+                    if (!relocsOnly && Target.Architecture == TargetArchitecture.X64)
+                    {
+                        // On Amd64, the 2nd word contains the EndOffset of the runtime function
+                        runtimeFunctionsBuilder.EmitReloc(methodColdCodeNode, RelocType.IMAGE_REL_BASED_ADDR32NB, delta: methodColdCodeNode.GetColdCodeSize());
+                    }
+                    runtimeFunctionsBuilder.EmitReloc(factory.RuntimeFunctionsGCInfo.StartSymbol, RelocType.IMAGE_REL_BASED_ADDR32NB, funcletOffsets[funcletOffsets.Length - 1]);
+                }
+            }
+#endif
 
             // Emit sentinel entry
             runtimeFunctionsBuilder.EmitUInt(~0u);
