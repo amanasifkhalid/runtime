@@ -69,6 +69,12 @@ namespace Internal.JitInterface
             sb.Append("__coldcode_" + nameMangler.GetMangledMethodName(_owningMethod));
         }
 
+        public override int CompareToImpl(ISortableNode other, CompilerComparer comparer)
+        {
+            MethodColdCodeNode otherNode = (MethodColdCodeNode)other;
+            return comparer.Compare(_owningMethod, otherNode._owningMethod);
+        }
+
         public override ObjectData GetData(NodeFactory factory, bool relocsOnly = false) => _methodColdCode;
 
         protected override string GetName(NodeFactory context) => throw new NotImplementedException();
