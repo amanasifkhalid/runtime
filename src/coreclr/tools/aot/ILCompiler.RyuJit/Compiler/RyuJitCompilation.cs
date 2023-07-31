@@ -137,7 +137,8 @@ namespace ILCompiler
             }
             else
             {
-                CompileMultiThreaded(methodsToCompile);
+                CompileSingleThreaded(methodsToCompile);
+                // CompileMultiThreaded(methodsToCompile);
             }
         }
         private void CompileMultiThreaded(List<MethodCodeNode> methodsToCompile)

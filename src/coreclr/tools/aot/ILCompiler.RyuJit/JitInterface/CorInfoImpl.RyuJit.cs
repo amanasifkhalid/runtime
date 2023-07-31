@@ -33,6 +33,7 @@ namespace Internal.JitInterface
         private RyuJitCompilation _compilation;
         private MethodDebugInformation _debugInfo;
         private MethodCodeNode _methodCodeNode;
+        private MethodColdCodeNode _methodColdCodeNode;
         private DebugLocInfo[] _debugLocInfos;
         private DebugVarInfo[] _debugVarInfos;
         private readonly UnboxingMethodDescFactory _unboxingThunkFactory = new UnboxingMethodDescFactory();

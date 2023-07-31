@@ -26,6 +26,7 @@
 
   <ItemGroup>
     <Compile Include="Compiler\DependencyAnalysis\MethodCodeNode.cs" />
+	<Compile Include="Compiler\DependencyAnalysis\MethodColdCodeNode.cs" />
     <Compile Include="Compiler\DependencyAnalysis\RyuJitNodeFactory.cs" />
     <Compile Include="Compiler\ProfileDataManager.cs" />
     <Compile Include="Compiler\RyuJitCompilation.cs" />
