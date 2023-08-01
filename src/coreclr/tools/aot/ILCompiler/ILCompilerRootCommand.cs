@@ -157,6 +157,8 @@ namespace ILCompiler
             new("--make-repro-path") { Description = "Path where to place a repro package" };
         public CliOption<string[]> UnmanagedEntryPointsAssemblies { get; } =
             new("--generateunmanagedentrypoints") { DefaultValueFactory = _ => Array.Empty<string>(), Description = "Generate unmanaged entrypoints for a given assembly" };
+        public CliOption<bool> HotColdSplitting { get; } =
+            new("--hot-cold-splitting") { Description = "Enable hot/cold splitting optimization" };
 
         public OptimizationMode OptimizationMode { get; private set; }
         public ParseResult Result;
@@ -235,6 +237,7 @@ namespace ILCompiler
             Options.Add(SingleMethodGenericArgs);
             Options.Add(MakeReproPath);
             Options.Add(UnmanagedEntryPointsAssemblies);
+            Options.Add(HotColdSplitting);
 
             this.SetAction(result =>
             {

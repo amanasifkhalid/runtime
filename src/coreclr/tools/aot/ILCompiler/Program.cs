@@ -546,7 +546,8 @@ namespace ILCompiler
                 .UseSecurityMitigationOptions(securityMitigationOptions)
                 .UseDebugInfoProvider(debugInfoProvider)
                 .UseDwarf5(Get(_command.UseDwarf5))
-                .UseResilience(resilient);
+                .UseResilience(resilient)
+                .UseHotColdSplitting(Get(_command.HotColdSplitting));
 
             ICompilation compilation = builder.ToCompilation();
 

@@ -123,8 +123,10 @@ namespace ILCompiler
             if (_resilient)
                 options |= RyuJitCompilationOptions.UseResilience;
 
-            // TODO: Andrew Au, Command line option
-            jitFlagBuilder.Add(CorJitFlag.CORJIT_FLAG_PROCSPLIT);
+            if (_hotColdSplitting)
+            {
+                jitFlagBuilder.Add(CorJitFlag.CORJIT_FLAG_PROCSPLIT);
+            }
 
             var factory = new RyuJitNodeFactory(_context, _compilationGroup, _metadataManager, _interopStubManager, _nameMangler, _vtableSliceProvider, _dictionaryLayoutProvider, _inlinedThreadStatics, GetPreinitializationManager());
 

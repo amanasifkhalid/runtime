@@ -38,7 +38,6 @@ namespace ILCompiler
         private ReadyToRunFileLayoutAlgorithm _r2rFileLayoutAlgorithm;
         private int _customPESectionAlignment;
         private bool _verifyTypeAndFieldLayout;
-        private bool _hotColdSplitting;
         private CompositeImageSettings _compositeImageSettings;
         private ulong _imageBase;
         private NodeFactoryOptimizationFlags _nodeFactoryOptimizationFlags = new NodeFactoryOptimizationFlags();
@@ -188,11 +187,11 @@ namespace ILCompiler
             return this;
         }
 
-        public ReadyToRunCodegenCompilationBuilder UseHotColdSplitting(bool hotColdSplitting)
-        {
-            _hotColdSplitting = hotColdSplitting;
-            return this;
-        }
+        // public ReadyToRunCodegenCompilationBuilder UseHotColdSplitting(bool hotColdSplitting)
+        // {
+        //     _hotColdSplitting = hotColdSplitting;
+        //     return this;
+        // }
 
         public ReadyToRunCodegenCompilationBuilder UseCompositeImageSettings(CompositeImageSettings compositeImageSettings)
         {

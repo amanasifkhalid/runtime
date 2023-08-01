@@ -25,6 +25,7 @@ namespace ILCompiler
         protected OptimizationMode _optimizationMode = OptimizationMode.None;
         protected int _parallelism = -1;
         protected bool _resilient;
+        protected bool _hotColdSplitting;
 
         public CompilationBuilder(CompilerTypeSystemContext context, CompilationModuleGroup compilationGroup, NameMangler nameMangler)
         {
@@ -76,6 +77,12 @@ namespace ILCompiler
         public CompilationBuilder UseResilience(bool resilient)
         {
             _resilient = resilient;
+            return this;
+        }
+
+        public CompilationBuilder UseHotColdSplitting(bool hotColdSplitting)
+        {
+            _hotColdSplitting = hotColdSplitting;
             return this;
         }
 
