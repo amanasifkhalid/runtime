@@ -22,7 +22,7 @@ namespace ILCompiler.DependencyAnalysis
 
         public override ObjectNodeSection GetSection(NodeFactory factory)
         {
-            return factory.Target.IsWindows ? ObjectNodeSection.ManagedCodeWindowsContentSection : ObjectNodeSection.ManagedCodeUnixContentSection;
+            return factory.Target.IsWindows ? ObjectNodeSection.ManagedColdCodeWindowsContentSection : ObjectNodeSection.ManagedColdCodeUnixContentSection;
         }
 
         public override bool IsShareable => false;
