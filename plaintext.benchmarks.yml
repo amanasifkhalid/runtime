@@ -1,0 +1,48 @@
+﻿imports:
+    - https://raw.githubusercontent.com/dotnet/crank/main/src/Microsoft.Crank.Jobs.Bombardier/bombardier.yml
+
+variables:
+  serverPort: 5000
+
+jobs:
+  aspnetbenchmarks:
+    source:
+      repository: https://github.com/aspnet/benchmarks.git
+      branchOrCommit: main
+      project: src/Benchmarks/Benchmarks.csproj
+    readyStateText: Application started.
+    variables:
+      presetHeaders: plaintext
+      serverPort: 5000
+      protocol: http
+      serverScheme: http
+      server: Kestrel
+      transport: Sockets
+      scenario: plaintext
+      database: ''
+    arguments: "--nonInteractive true --scenarios {{scenario}} --urls {{serverScheme}}://{{serverAddress}}:{{serverPort}} --server {{server}} --kestrelTransport {{transport}} --protocol {{protocol}} {% if database.size > 0 %} --database {{ database }} {% endif %}"
+  
+scenarios:
+  plaintext:
+    application:
+      job: aspnetbenchmarks
+      variables:
+        scenario: plaintext
+    load:
+      job: bombardier
+      variables:
+        serverPort: 5000
+        path: /
+
+profiles:
+  local:
+    variables:
+      serverAddress: localhost
+    jobs: 
+      application:
+        endpoints: 
+          - http://localhost:5010
+      load:
+        endpoints: 
+          - http://localhost:5010
+

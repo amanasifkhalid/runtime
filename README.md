@@ -16,6 +16,20 @@
 This repo contains the code to build the .NET runtime, libraries and shared host (`dotnet`) installers for
 all supported platforms, as well as the sources to .NET runtime and libraries.
 
+## NativeAOT Hot/Cold Splitting Prototype
+This branch contains my work on top of Andrew Au's NativeAOT hot/cold splitting [prototype](https://github.com/cshung/runtimelab/tree/private/bring-up-nativeaot). Here's how to reproduce my benchmark setup:
+* Clone my changes, and from the root directory, build everything with `build.[cmd|sh] -c Release`.
+* As of writing, the prototype does not implement stack walking just yet, so programs that throw exceptions or invoke the GC probably won't work with splitting on. The plaintext scenario in the TechEmpower Platform benchmark has few memory allocations and shouldn't throw exceptions, and is thus promising for our purposes. Clone the [aspnet/Benchmarks](https://github.com/aspnet/benchmarks) repository, and navigate to `src\BenchmarksApps\TechEmpower\PlatformBenchmarks\`.
+* Open `nuget.config`, and add `<add key="local" value="C:\path\to\dotnet\runtime\artifacts\packages\Release\Shipping" />` inside the `<packageSources>` element.
+* Run `dotnet add package Microsoft.DotNet.ILCompiler -v 8.0.0-dev` to use your local build of `ilc` with the benchmark.
+* To enable hot/cold splitting, add `<ItemGroup><IlcArg Include="--hot-cold-splitting" /></ItemGroup>` to `PlatformBenchmarks.csproj`.
+* Run `dotnet publish --packages pkg -r [win-x64|linux-x64|osx-64] -c Release -p:PublishAot=true -f net8.0 -p:TargetFrameworks=net8.0` to build the benchmark with your local build of NativeAOT.
+* The benchmark executable you'll want to use is `bin\Release\net8.0\[win-x64|linux-x64|osx-64]\native\PlatformBenchmarks.exe`, but it has dependencies in `bin\Release\net8.0\[win-x64|linux-x64|osx-64]\publish\`. To keep things simple, just copy over the executable in `native\` into `publish\`.
+* You'll need the [Crank](https://github.com/dotnet/crank) tool to run the benchmark. Make sure you install `crank.exe` and `crank-agent.exe` (if you want to run the benchmark locally).
+* Start `crank-agent.exe` in a separate terminal instance.
+* Run `crank --config C:\<path to runtime>\plaintext.benchmarks.yml --profile local --scenario plaintext --application.framework net8.0 --application.source.project "" --application.source.repository "" --application.source.localFolder C:\<path to benchmarks>\src\Benchmarks\bin\Release\net8.0\win-x64\publish\ --application.executable Benchmarks.exe`. To pass environment variables, append `--application.environmentVariables DOTNET_somevar=someval` to the command.
+* NOTE: As of writing, the plaintext benchmark crashes after about 1,800 requests if splitting is on. For now, we're interested in startup metrics, so this isn't a huge issue. But keep in mind this crash is expected at the moment.
+
 ## What is .NET?
 
 Official Starting Page: <https://dotnet.microsoft.com>
