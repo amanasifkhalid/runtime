@@ -1,0 +1,58 @@
+﻿# Examples:
+# --config platform.benchmarks.yml --scenario json --profile aspnet-citrine-lin
+
+imports:
+  - https://raw.githubusercontent.com/dotnet/crank/main/src/Microsoft.Crank.Jobs.Wrk/wrk.yml
+  - https://raw.githubusercontent.com/dotnet/crank/main/src/Microsoft.Crank.Jobs.Bombardier/bombardier.yml
+  - https://github.com/aspnet/Benchmarks/blob/main/scenarios/aspnet.profiles.yml?raw=true
+
+variables:
+  serverPort: 5000
+
+jobs:
+  platformbenchmarks:
+    source:
+      repository: https://github.com/aspnet/benchmarks.git
+      branchOrCommit: main
+      project: src/BenchmarksApps/TechEmpower/PlatformBenchmarks/PlatformBenchmarks.csproj
+    readyStateText: Application started.
+    framework: net7.0
+    environmentVariables:
+      database: PostgreSQL
+      # [SuppressMessage("Microsoft.Security", "CS002:SecretInNextLine", Justification="Development password, not confidential")]
+      connectionstring: Server={{databaseServer}};Database=hello_world;User Id=benchmarkdbuser;Password=benchmarkdbpass;Maximum Pool Size=18;Enlist=false;Max Auto Prepare=4;Multiplexing=true;Write Coalescing Buffer Threshold Bytes=1000
+
+scenarios:
+  plaintext:
+    application:
+      job: platformbenchmarks
+    load:
+      job: bombardier
+      variables:
+        serverPort: 5000
+        path: /plaintext
+
+profiles:
+  local:
+    variables:
+      serverAddress: localhost
+    jobs: 
+      db:
+        endpoints: 
+          - http://localhost:5010
+        aliases:
+          - downstream
+          - extra
+      application:
+        endpoints: 
+          - http://localhost:5010
+        variables:
+          databaseServer: localhost
+        aliases:
+          - main
+      load:
+        endpoints: 
+          - http://localhost:5010
+        aliases:
+          - warmup
+          - secondary
