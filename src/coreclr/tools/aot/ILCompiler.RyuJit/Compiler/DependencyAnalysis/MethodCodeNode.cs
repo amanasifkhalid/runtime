@@ -97,6 +97,12 @@ namespace ILCompiler.DependencyAnalysis
                 dependencies.Add(new DependencyListEntry(factory.MethodAssociatedData(this), "Method associated data"));
             }
 
+            if (this.ColdCodeNode != null)
+            {
+                dependencies ??= new DependencyList();
+                dependencies.Add(this.ColdCodeNode, "cold");
+            }
+
             return dependencies;
         }
 
@@ -115,6 +121,7 @@ namespace ILCompiler.DependencyAnalysis
             return factory.MethodEntrypoint(nonUnboxingMethod, false);
         }
 
+        public MethodColdCodeNode ColdCodeNode { get; set; }
         public FrameInfo[] FrameInfos => _frameInfos;
         public byte[] GCInfo => _gcInfo;
         public MethodExceptionHandlingInfoNode EHInfo => _ehInfo;

@@ -8,10 +8,11 @@ using System;
 
 namespace ILCompiler.DependencyAnalysis
 {
-    public class MethodColdCodeNode : ObjectNode, ISymbolDefinitionNode
+    public class MethodColdCodeNode : ObjectNode, INodeWithCodeInfo, ISymbolDefinitionNode
     {
         private ObjectData _methodColdCode;
         private MethodDesc _owningMethod;
+        private FrameInfo[] _frameInfos;
 
         public MethodColdCodeNode(MethodDesc owningMethod)
         {
@@ -55,6 +56,22 @@ namespace ILCompiler.DependencyAnalysis
         public int GetColdCodeSize()
         {
             return _methodColdCode.Data.Length;
+        }
+
+        public FrameInfo[] FrameInfos => _frameInfos;
+        public byte[] GCInfo => null;
+        public MethodExceptionHandlingInfoNode EHInfo => null;
+        public DebugEHClauseInfo[] DebugEHClauseInfos => null;
+
+        public ISymbolNode GetAssociatedDataNode(NodeFactory factory)
+        {
+            return null;
+        }
+
+        public void InitializeFrameInfos(FrameInfo[] frameInfos)
+        {
+            Debug.Assert(_frameInfos == null);
+            _frameInfos = frameInfos;
         }
     }
 }

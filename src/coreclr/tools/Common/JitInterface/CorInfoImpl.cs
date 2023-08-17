@@ -486,8 +486,9 @@ namespace Internal.JitInterface
                     alignment,
                     new ISymbolDefinitionNode[] { _methodColdCodeNode });
                 _methodColdCodeNode.SetCode(coldObjectData);
-#if READYTORUN
                 _methodCodeNode.ColdCodeNode = _methodColdCodeNode;
+#if !READYTORUN
+                _methodColdCodeNode.InitializeFrameInfos(_coldFrameInfos);
 #endif
             }
 
@@ -3659,6 +3660,20 @@ namespace Internal.JitInterface
             }
             else
             {
+#if !READYTORUN
+                if (blobData == null)
+                {
+                    const byte UNW_FLAG_CHAININFO = 4;
+                    const byte FlagsShift = 3;
+
+                    // Chain unwind info
+                    blobData = new byte[4];
+                    blobData[0] = 1 + (UNW_FLAG_CHAININFO << FlagsShift); // Version = 1, UNW_FLAG_CHAININFO
+                    blobData[1] = 0; // SizeOfProlog = 0
+                    blobData[2] = 0; // CountOfCode = 0
+                    blobData[3] = _frameInfos[0].BlobData[3]; // Copying frame and frame offset from main function
+                }
+#endif
                 _coldFrameInfos[_usedColdFrameInfos++] = new FrameInfo(flags, (int)startOffset, (int)endOffset, blobData);
             }
         }
