@@ -25,11 +25,6 @@ namespace ILCompiler.DependencyAnalysis
             get;
         }
 
-        int CodeSize
-        {
-            get;
-        }
-
         ISymbolNode HotCodeNode
         {
             get;

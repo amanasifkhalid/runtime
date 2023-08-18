@@ -125,7 +125,6 @@ namespace ILCompiler.DependencyAnalysis
         public FrameInfo[] FrameInfos => _frameInfos;
         public byte[] GCInfo => _gcInfo;
         public MethodExceptionHandlingInfoNode EHInfo => _ehInfo;
-        public int CodeSize => _methodCode.Data.Length;
         public ISymbolNode HotCodeNode => null;
 
         public ISymbolNode GetAssociatedDataNode(NodeFactory factory)

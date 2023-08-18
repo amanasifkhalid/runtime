@@ -555,22 +555,14 @@ namespace ILCompiler.DependencyAnalysis
                     Debug.Assert(nodeWithCodeInfo.HotCodeNode != null);
 
                     // Emit RUNTIME_FUNCTION entry for corresponding hot code (start offset, end offset, unwind info address)
-
-                    // TODO: To be honest, I'm not sure what RelocType I need here...
-                    // Crossgen implementation uses IMAGE_REL_BASED_ADDR32NB (see MethodGCInfoNode::EncodeData()), but that doesn't seem to emit the correct number of bytes
-                    // (Each entry in RUNTIME_FUNCTION (start offset, end offset, unwind info address) needs to be 4 bytes)
-                    // Right now, the emitted start/end offsets and unwind info address are too high (ex: start offset like 0xFFCF9B38)
-                    int size = EmitSymbolReference(nodeWithCodeInfo.HotCodeNode, 0, RelocType.IMAGE_REL_BASED_REL32);
-                    Debug.Assert(size == 4);
-                    size = EmitSymbolReference(nodeWithCodeInfo.HotCodeNode, ((INodeWithCodeInfo)nodeWithCodeInfo.HotCodeNode).CodeSize, RelocType.IMAGE_REL_BASED_REL32);
-                    Debug.Assert(size == 4);
+                    EmitSymbolReference(nodeWithCodeInfo.HotCodeNode, 0, RelocType.IMAGE_REL_BASED_ABSOLUTE);
+                    EmitSymbolReference(nodeWithCodeInfo.HotCodeNode, ((INodeWithCodeInfo)nodeWithCodeInfo.HotCodeNode).FrameInfos[0].EndOffset, RelocType.IMAGE_REL_BASED_ABSOLUTE);
 
                     // Build blobSymbolName for target unwind info
                     _sb.Clear().Append(_nodeFactory.NameMangler.CompilationUnitPrefix).Append("_unwind0");
                     AppendExternCPrefix(_sb);
                     nodeWithCodeInfo.HotCodeNode.AppendMangledName(_nodeFactory.NameMangler, _sb);
-                    size = EmitSymbolRef(_sb.Append('\0'), RelocType.IMAGE_REL_BASED_REL32);
-                    Debug.Assert(size == 4);
+                    EmitSymbolRef(_sb.Append('\0'), RelocType.IMAGE_REL_BASED_ABSOLUTE);
                 }
 
                 EmitIntValue((byte)flags, 1);
@@ -1131,7 +1123,7 @@ namespace ILCompiler.DependencyAnalysis
                             {
                                 // This is the last reloc. Set the next reloc offset to -1 in case the last reloc has a zero size,
                                 // which means the reloc does not have vacant bytes corresponding to in the data buffer. E.g,
-                                // IMAGE_REL_THUMB_BRANCH24 is a kind of 24-bit reloc whose bits scatte over the instruction that
+                                // IMAGE_REL_THUMB_BRANCH24 is a kind of 24-bit reloc whose bits scatter over the instruction that
                                 // references it. We do not vacate extra bytes in the data buffer for this kind of reloc.
                                 nextRelocOffset = -1;
                             }

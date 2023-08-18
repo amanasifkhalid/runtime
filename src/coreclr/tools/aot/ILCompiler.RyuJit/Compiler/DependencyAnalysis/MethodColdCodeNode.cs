@@ -53,16 +53,10 @@ namespace ILCompiler.DependencyAnalysis
             _methodColdCode = data;
         }
 
-        public int GetColdCodeSize()
-        {
-            return _methodColdCode.Data.Length;
-        }
-
         public FrameInfo[] FrameInfos => _frameInfos;
         public byte[] GCInfo => null;
         public MethodExceptionHandlingInfoNode EHInfo => null;
         public DebugEHClauseInfo[] DebugEHClauseInfos => null;
-        public int CodeSize => 0;
         public ISymbolNode HotCodeNode { get; set; }
 
         public ISymbolNode GetAssociatedDataNode(NodeFactory factory)
