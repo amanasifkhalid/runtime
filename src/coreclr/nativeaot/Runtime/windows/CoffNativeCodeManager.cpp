@@ -100,10 +100,13 @@ static PTR_VOID GetUnwindDataBlob(TADDR moduleBase, PTR_RUNTIME_FUNCTION pRuntim
 #if defined(TARGET_AMD64)
     PTR_UNWIND_INFO pUnwindInfo(dac_cast<PTR_UNWIND_INFO>(moduleBase + pRuntimeFunction->UnwindInfoAddress));
 
-    size_t size = offsetof(UNWIND_INFO, UnwindCode) + sizeof(UNWIND_CODE) * pUnwindInfo->CountOfUnwindCodes;
+    if (pUnwindInfo->Flags & UNW_FLAG_CHAININFO)
+    {
+        uint32_t unwindInfoOffset = ((PTR_RUNTIME_FUNCTION)(&(pUnwindInfo->UnwindCode)))->UnwindInfoAddress;
+        pUnwindInfo = dac_cast<PTR_UNWIND_INFO>(moduleBase + unwindInfoOffset);
+    }
 
-    // Chained unwind info is not supported at this time
-    ASSERT((pUnwindInfo->Flags & UNW_FLAG_CHAININFO) == 0);
+    size_t size = offsetof(UNWIND_INFO, UnwindCode) + sizeof(UNWIND_CODE) * pUnwindInfo->CountOfUnwindCodes;
 
     if (pUnwindInfo->Flags & (UNW_FLAG_EHANDLER | UNW_FLAG_UHANDLER))
     {

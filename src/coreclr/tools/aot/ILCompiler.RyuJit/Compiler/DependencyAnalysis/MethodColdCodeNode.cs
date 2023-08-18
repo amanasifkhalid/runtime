@@ -62,6 +62,8 @@ namespace ILCompiler.DependencyAnalysis
         public byte[] GCInfo => null;
         public MethodExceptionHandlingInfoNode EHInfo => null;
         public DebugEHClauseInfo[] DebugEHClauseInfos => null;
+        public int CodeSize => 0;
+        public ISymbolNode HotCodeNode { get; set; }
 
         public ISymbolNode GetAssociatedDataNode(NodeFactory factory)
         {

@@ -25,6 +25,16 @@ namespace ILCompiler.DependencyAnalysis
             get;
         }
 
+        int CodeSize
+        {
+            get;
+        }
+
+        ISymbolNode HotCodeNode
+        {
+            get;
+        }
+
         ISymbolNode GetAssociatedDataNode(NodeFactory factory);
     }
 }

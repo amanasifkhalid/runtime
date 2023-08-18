@@ -547,6 +547,32 @@ namespace ILCompiler.DependencyAnalysis
 
                 EmitBlob(blob);
 
+                // Check for chained unwind info (cold code only)
+                const byte UNW_FLAG_CHAININFO = 4;
+                const byte FlagsShift = 3;
+                if ((blob[0] & (UNW_FLAG_CHAININFO << FlagsShift)) != 0)
+                {
+                    Debug.Assert(nodeWithCodeInfo.HotCodeNode != null);
+
+                    // Emit RUNTIME_FUNCTION entry for corresponding hot code (start offset, end offset, unwind info address)
+
+                    // TODO: To be honest, I'm not sure what RelocType I need here...
+                    // Crossgen implementation uses IMAGE_REL_BASED_ADDR32NB (see MethodGCInfoNode::EncodeData()), but that doesn't seem to emit the correct number of bytes
+                    // (Each entry in RUNTIME_FUNCTION (start offset, end offset, unwind info address) needs to be 4 bytes)
+                    // Right now, the emitted start/end offsets and unwind info address are too high (ex: start offset like 0xFFCF9B38)
+                    int size = EmitSymbolReference(nodeWithCodeInfo.HotCodeNode, 0, RelocType.IMAGE_REL_BASED_REL32);
+                    Debug.Assert(size == 4);
+                    size = EmitSymbolReference(nodeWithCodeInfo.HotCodeNode, ((INodeWithCodeInfo)nodeWithCodeInfo.HotCodeNode).CodeSize, RelocType.IMAGE_REL_BASED_REL32);
+                    Debug.Assert(size == 4);
+
+                    // Build blobSymbolName for target unwind info
+                    _sb.Clear().Append(_nodeFactory.NameMangler.CompilationUnitPrefix).Append("_unwind0");
+                    AppendExternCPrefix(_sb);
+                    nodeWithCodeInfo.HotCodeNode.AppendMangledName(_nodeFactory.NameMangler, _sb);
+                    size = EmitSymbolRef(_sb.Append('\0'), RelocType.IMAGE_REL_BASED_REL32);
+                    Debug.Assert(size == 4);
+                }
+
                 EmitIntValue((byte)flags, 1);
 
                 if (associatedDataNode != null)

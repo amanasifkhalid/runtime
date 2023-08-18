@@ -489,6 +489,7 @@ namespace Internal.JitInterface
                 _methodCodeNode.ColdCodeNode = _methodColdCodeNode;
 #if !READYTORUN
                 _methodColdCodeNode.InitializeFrameInfos(_coldFrameInfos);
+                _methodColdCodeNode.HotCodeNode = _methodCodeNode;
 #endif
             }
 
@@ -3666,11 +3667,13 @@ namespace Internal.JitInterface
                     const byte UNW_FLAG_CHAININFO = 4;
                     const byte FlagsShift = 3;
 
-                    // Chain unwind info
+                    // Set up chained unwind info header
                     blobData = new byte[4];
                     blobData[0] = 1 + (UNW_FLAG_CHAININFO << FlagsShift); // Version = 1, UNW_FLAG_CHAININFO
                     blobData[1] = 0; // SizeOfProlog = 0
                     blobData[2] = 0; // CountOfCode = 0
+
+                    Debug.Assert(_usedFrameInfos > 0);
                     blobData[3] = _frameInfos[0].BlobData[3]; // Copying frame and frame offset from main function
                 }
 #endif
