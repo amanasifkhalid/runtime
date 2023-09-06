@@ -532,6 +532,7 @@
     <Compile Include="Compiler\DependencyAnalysis\MethodAssociatedDataNode.cs" />
     <Compile Include="Compiler\DependencyAnalysis\ArrayOfEmbeddedPointersNode.cs" />
     <Compile Include="Compiler\DependencyAnalysis\ReadyToRunHeaderNode.cs" />
+    <Compile Include="Compiler\DependencyAnalysis\HotColdMapNode.cs" />
     <Compile Include="Compiler\DependencyAnalysis\ModulesSectionNode.cs" />
     <Compile Include="Compiler\DependencyAnalysis\TypeManagerIndirectionNode.cs" />
     <Compile Include="Compiler\DependencyAnalysis\TlsRootNode.cs" />

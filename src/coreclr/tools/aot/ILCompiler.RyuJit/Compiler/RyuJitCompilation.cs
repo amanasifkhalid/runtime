@@ -28,6 +28,8 @@ namespace ILCompiler
         private readonly MethodImportationErrorProvider _methodImportationErrorProvider;
         private readonly int _parallelism;
 
+        private uint _currentMethodIndex;
+
         public InstructionSetSupport InstructionSetSupport { get; }
 
         internal RyuJitCompilation(
@@ -105,7 +107,7 @@ namespace ILCompiler
 
         protected override void ComputeDependencyNodeDependencies(List<DependencyNodeCore<NodeFactory>> obj)
         {
-            // Determine the list of method we actually need to compile
+            // Determine the list of methods we actually need to compile
             var methodsToCompile = new List<MethodCodeNode>();
             var canonicalMethodsToCompile = new HashSet<MethodDesc>();
 
@@ -140,7 +142,13 @@ namespace ILCompiler
                 CompileSingleThreaded(methodsToCompile);
                 // CompileMultiThreaded(methodsToCompile);
             }
+
+            if (_nodeFactory.HotColdMap != null)
+            {
+                _nodeFactory.HotColdMap.NumHotRuntimeFunctions = _currentMethodIndex;
+            }
         }
+
         private void CompileMultiThreaded(List<MethodCodeNode> methodsToCompile)
         {
             if (Logger.IsVerbose)
@@ -213,6 +221,16 @@ namespace ILCompiler
                 else
                     Logger.LogError($"Method will always throw because: {exception.Message}", 1005, method, MessageSubCategory.AotAnalysis);
             }
+
+            // Save current hot runtime function's MethodIndex, and number of cold FrameInfos to calculate its MethodIndex
+            // once we know how many hot runtime function entries there are
+            if (methodCodeNodeNeedingCode.ColdCodeNode != null)
+            {
+                _nodeFactory.GenerateHotColdMap(_dependencyGraph);
+                _nodeFactory.HotColdMap.Add(_currentMethodIndex, (uint)methodCodeNodeNeedingCode.ColdCodeNode.FrameInfos.Length);
+            }
+
+            _currentMethodIndex += (uint)methodCodeNodeNeedingCode.FrameInfos.Length;
         }
 
         public override MethodIL GetMethodIL(MethodDesc method)

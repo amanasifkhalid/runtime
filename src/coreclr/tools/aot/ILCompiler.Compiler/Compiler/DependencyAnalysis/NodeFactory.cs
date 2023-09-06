@@ -1283,7 +1283,9 @@ namespace ILCompiler.DependencyAnalysis
 
         public InterfaceDispatchCellSectionNode InterfaceDispatchCellSection = new InterfaceDispatchCellSectionNode();
 
-        public ReadyToRunHeaderNode ReadyToRunHeader;
+        public HotColdMapNode HotColdMap;
+
+        public ReadyToRunHeaderNode ReadyToRunHeader = new ReadyToRunHeaderNode();
 
         public Dictionary<ISymbolNode, string> NodeAliases = new Dictionary<ISymbolNode, string>();
 
@@ -1291,10 +1293,18 @@ namespace ILCompiler.DependencyAnalysis
 
         protected internal TlsRootNode TlsRoot = new TlsRootNode();
 
+        public void GenerateHotColdMap(DependencyAnalyzerBase<NodeFactory> graph)
+        {
+            if (HotColdMap == null)
+            {
+                HotColdMap = new HotColdMapNode();
+                ReadyToRunHeader.Add(ReadyToRunSectionType.NativeHotColdMap, HotColdMap);
+                graph.AddRoot(HotColdMap, "HotColdMap is generated because there is cold code");
+            }
+        }
+
         public virtual void AttachToDependencyGraph(DependencyAnalyzerBase<NodeFactory> graph)
         {
-            ReadyToRunHeader = new ReadyToRunHeaderNode();
-
             graph.AddRoot(ReadyToRunHeader, "ReadyToRunHeader is always generated");
             graph.AddRoot(new ModulesSectionNode(), "ModulesSection is always generated");
 
