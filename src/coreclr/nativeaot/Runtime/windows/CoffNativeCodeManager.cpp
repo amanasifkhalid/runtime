@@ -13,6 +13,7 @@
 #include "CoffNativeCodeManager.h"
 #include "varint.h"
 #include "holder.h"
+#include "ModuleHeaders.h"
 
 #include "CommonMacros.inl"
 
@@ -100,12 +101,6 @@ static PTR_VOID GetUnwindDataBlob(TADDR moduleBase, PTR_RUNTIME_FUNCTION pRuntim
 #if defined(TARGET_AMD64)
     PTR_UNWIND_INFO pUnwindInfo(dac_cast<PTR_UNWIND_INFO>(moduleBase + pRuntimeFunction->UnwindInfoAddress));
 
-    if (pUnwindInfo->Flags & UNW_FLAG_CHAININFO)
-    {
-        uint32_t unwindInfoOffset = ((PTR_RUNTIME_FUNCTION)(&(pUnwindInfo->UnwindCode)))->UnwindInfoAddress;
-        pUnwindInfo = dac_cast<PTR_UNWIND_INFO>(moduleBase + unwindInfoOffset);
-    }
-
     size_t size = offsetof(UNWIND_INFO, UnwindCode) + sizeof(UNWIND_CODE) * pUnwindInfo->CountOfUnwindCodes;
 
     if (pUnwindInfo->Flags & (UNW_FLAG_EHANDLER | UNW_FLAG_UHANDLER))
@@ -171,10 +166,13 @@ static PTR_VOID GetUnwindDataBlob(TADDR moduleBase, PTR_RUNTIME_FUNCTION pRuntim
 CoffNativeCodeManager::CoffNativeCodeManager(TADDR moduleBase,
                                              PTR_VOID pvManagedCodeStartRange, uint32_t cbManagedCodeRange,
                                              PTR_RUNTIME_FUNCTION pRuntimeFunctionTable, uint32_t nRuntimeFunctionTable,
+                                             DWORD * pHotColdMap, uint32_t nHotColdMap,
                                              PTR_PTR_VOID pClasslibFunctions, uint32_t nClasslibFunctions)
     : m_moduleBase(moduleBase),
       m_pvManagedCodeStartRange(pvManagedCodeStartRange), m_cbManagedCodeRange(cbManagedCodeRange),
       m_pRuntimeFunctionTable(pRuntimeFunctionTable), m_nRuntimeFunctionTable(nRuntimeFunctionTable),
+      m_pCurrentMethodWithEH(NULL),
+      m_pHotColdMap(pHotColdMap), m_nHotColdMap(nHotColdMap),
       m_pClasslibFunctions(pClasslibFunctions), m_nClasslibFunctions(nClasslibFunctions)
 {
 }
@@ -183,7 +181,7 @@ CoffNativeCodeManager::~CoffNativeCodeManager()
 {
 }
 
-static int LookupUnwindInfoForMethod(uint32_t relativePc,
+static int LookupUnwindInfoForMethod(uint32_t relativePC,
                                      PTR_RUNTIME_FUNCTION pRuntimeFunctionTable,
                                      int low,
                                      int high)
@@ -196,7 +194,7 @@ static int LookupUnwindInfoForMethod(uint32_t relativePc,
        int middle = low + (high - low) / 2;
 
        PTR_RUNTIME_FUNCTION pFunctionEntry = pRuntimeFunctionTable + middle;
-       if (relativePc < pFunctionEntry->BeginAddress)
+       if (relativePC < pFunctionEntry->BeginAddress)
        {
            high = middle - 1;
        }
@@ -209,7 +207,7 @@ static int LookupUnwindInfoForMethod(uint32_t relativePc,
     for (int i = low; i < high; i++)
     {
         PTR_RUNTIME_FUNCTION pNextFunctionEntry = pRuntimeFunctionTable + (i + 1);
-        if (relativePc < pNextFunctionEntry->BeginAddress)
+        if (relativePC < pNextFunctionEntry->BeginAddress)
         {
             high = i;
             break;
@@ -217,7 +215,7 @@ static int LookupUnwindInfoForMethod(uint32_t relativePc,
     }
 
     PTR_RUNTIME_FUNCTION pFunctionEntry = pRuntimeFunctionTable + high;
-    if (relativePc >= pFunctionEntry->BeginAddress)
+    if (relativePC >= pFunctionEntry->BeginAddress)
     {
         return high;
     }
@@ -226,12 +224,55 @@ static int LookupUnwindInfoForMethod(uint32_t relativePc,
     return -1;
 }
 
-struct CoffNativeMethodInfo
+static DWORD LookupHotColdMapping(DWORD relativePC, DWORD * pHotColdMap, uint32_t nHotColdMap)
 {
-    PTR_RUNTIME_FUNCTION mainRuntimeFunction;
-    PTR_RUNTIME_FUNCTION runtimeFunction;
-    bool executionAborted;
-};
+    ASSERT(nHotColdMap != 0);
+    int low  = 0;
+    int high = ((nHotColdMap - 1) / 2);
+
+    // HotColdMap contains (cold MethodIndex, hot MethodIndex) pairs.
+    // pHotColdMap[0] is the smallest cold MethodIndex, so if methodIndex < pHotColdMap[0],
+    // methodIndex must be hot. Thus, indexCorrection = 1, and we check if methodIndex == entry[1].
+    // Else, methodIndex must be cold. Thus, indexCorrection = 0, and we check if methodIndex == entry[0].
+    bool isColdCode = relativePC >= pHotColdMap[0];
+    int indexCorrection = (int)(!isColdCode);
+
+    // Start with binary search.
+    // Use linear search once we get down to a small number of elements
+    // to avoid binary search overhead.
+    while (high - low > 10)
+    {
+        int middle = low + (high - low) / 2;
+        int index = (middle * 2) + indexCorrection;
+
+        if (relativePC < pHotColdMap[index])
+        {
+            high = middle - 1;
+        }
+        else
+        {
+            low = middle;
+        }
+    }
+
+    for (int i = low; i < high; i++)
+    {
+        int nextIndex = (i + 1) * 2;
+        if (relativePC < pHotColdMap[nextIndex + indexCorrection])
+        {
+            high = i;
+            break;
+        }
+    }
+
+    int index = high * 2;
+    if (isColdCode)
+    {
+        return pHotColdMap[index + 1];
+    }
+
+    return pHotColdMap[index];
+}
 
 // Ensure that CoffNativeMethodInfo fits into the space reserved by MethodInfo
 static_assert(sizeof(CoffNativeMethodInfo) <= sizeof(MethodInfo), "CoffNativeMethodInfo too big");
@@ -256,26 +297,72 @@ bool CoffNativeCodeManager::FindMethodInfo(PTR_VOID        ControlPC,
         return false;
 
     PTR_RUNTIME_FUNCTION pRuntimeFunction = m_pRuntimeFunctionTable + MethodIndex;
-
     pMethodInfo->runtimeFunction = pRuntimeFunction;
 
-    // The runtime function could correspond to a funclet.  We need to get to the
-    // runtime function of the main method.
-    for (;;)
+    // Handle hot code
+    if ((m_nHotColdMap == 0) || (pRuntimeFunction->BeginAddress < m_pHotColdMap[0]))
     {
+        // The runtime function could correspond to a funclet. We need to get to the
+        // runtime function of the main method.
+        for (;;)
+        {
+            size_t unwindDataBlobSize;
+            PTR_VOID pUnwindDataBlob = GetUnwindDataBlob(m_moduleBase, pRuntimeFunction, &unwindDataBlobSize);
+
+            uint8_t unwindBlockFlags = *(dac_cast<DPTR(uint8_t)>(pUnwindDataBlob) + unwindDataBlobSize);
+            if ((unwindBlockFlags & UBF_FUNC_KIND_MASK) == UBF_FUNC_KIND_ROOT)
+                break;
+
+            pRuntimeFunction--;
+        }
+    }
+    else
+    {
+        DWORD hotStartRva;
+#if defined(TARGET_AMD64)
         size_t unwindDataBlobSize;
-        PTR_VOID pUnwindDataBlob = GetUnwindDataBlob(m_moduleBase, pRuntimeFunction, &unwindDataBlobSize);
+        PTR_UNWIND_INFO pUnwindInfo = (PTR_UNWIND_INFO)GetUnwindDataBlob(
+            m_moduleBase, pRuntimeFunction, &unwindDataBlobSize);
 
-        uint8_t unwindBlockFlags = *(dac_cast<DPTR(uint8_t)>(pUnwindDataBlob) + unwindDataBlobSize);
-        if ((unwindBlockFlags & UBF_FUNC_KIND_MASK) == UBF_FUNC_KIND_ROOT)
-            break;
+        if (pUnwindInfo->Flags & UNW_FLAG_CHAININFO)
+        {
+            hotStartRva = ((PTR_RUNTIME_FUNCTION)&(pUnwindInfo->UnwindCode))->BeginAddress;
+        }
+        else
+#endif
+        {
+            hotStartRva = LookupHotColdMapping((DWORD)relativePC, m_pHotColdMap, m_nHotColdMap);
+        }
 
-        pRuntimeFunction--;
+        ASSERT(hotStartRva < m_pHotColdMap[0]);
+        int hotMethodIndex = LookupUnwindInfoForMethod(
+            (uint32_t)hotStartRva, m_pRuntimeFunctionTable, 0, m_nRuntimeFunctionTable - 1);
+        ASSERT(hotMethodIndex >= 0);
+        PTR_RUNTIME_FUNCTION pHotRuntimeFunction = m_pRuntimeFunctionTable + hotMethodIndex;
+
+#if defined(_DEBUG) && defined(TARGET_AMD64)
+        size_t u;
+        PTR_UNWIND_INFO p = (PTR_UNWIND_INFO)GetUnwindDataBlob(m_moduleBase, pRuntimeFunction, &u);
+
+        if (p->Flags & UNW_FLAG_CHAININFO)
+        {
+            ASSERT(pHotRuntimeFunction->BeginAddress == ((PTR_RUNTIME_FUNCTION)&(p->UnwindCode))->BeginAddress);
+        }
+#endif
+
+        pRuntimeFunction = pHotRuntimeFunction;
     }
 
     pMethodInfo->mainRuntimeFunction = pRuntimeFunction;
-
     pMethodInfo->executionAborted = false;
+
+#ifdef _DEBUG
+    size_t unwindDataBlobSize;
+    PTR_VOID pUnwindDataBlob = GetUnwindDataBlob(m_moduleBase, pRuntimeFunction, &unwindDataBlobSize);
+    uint8_t unwindBlockFlags = *(dac_cast<DPTR(uint8_t)>(pUnwindDataBlob) + unwindDataBlobSize);
+    ASSERT((unwindBlockFlags & UBF_FUNC_KIND_MASK) == UBF_FUNC_KIND_ROOT);
+    ASSERT((m_nHotColdMap == 0) || (pRuntimeFunction->BeginAddress < m_pHotColdMap[0]));
+#endif
 
     return true;
 }
@@ -289,7 +376,14 @@ bool CoffNativeCodeManager::IsFunclet(MethodInfo * pMethInfo)
 
     uint8_t unwindBlockFlags = *(dac_cast<DPTR(uint8_t)>(pUnwindDataBlob) + unwindDataBlobSize);
 
-    // A funclet will have an entry in funclet to main method map
+#if defined(_DEBUG) && defined(TARGET_AMD64)
+    // Chained unwind info should not be used for funclets
+    if (((PTR_UNWIND_INFO)pUnwindDataBlob)->Flags & UNW_FLAG_CHAININFO)
+    {
+        ASSERT((unwindBlockFlags & UBF_FUNC_KIND_MASK) == UBF_FUNC_KIND_ROOT);
+    }
+#endif
+
     return (unwindBlockFlags & UBF_FUNC_KIND_MASK) != UBF_FUNC_KIND_ROOT;
 }
 
@@ -302,6 +396,14 @@ bool CoffNativeCodeManager::IsFilter(MethodInfo * pMethInfo)
 
     uint8_t unwindBlockFlags = *(dac_cast<DPTR(uint8_t)>(pUnwindDataBlob) + unwindDataBlobSize);
 
+#if defined(_DEBUG) && defined(TARGET_AMD64)
+    // Chained unwind info should not be used for funclets
+    if (((PTR_UNWIND_INFO)pUnwindDataBlob)->Flags & UNW_FLAG_CHAININFO)
+    {
+        ASSERT((unwindBlockFlags & UBF_FUNC_KIND_MASK) == UBF_FUNC_KIND_ROOT);
+    }
+#endif
+
     return (unwindBlockFlags & UBF_FUNC_KIND_MASK) == UBF_FUNC_KIND_FILTER;
 }
 
@@ -311,7 +413,19 @@ PTR_VOID CoffNativeCodeManager::GetFramePointer(MethodInfo *   pMethInfo,
     CoffNativeMethodInfo * pMethodInfo = (CoffNativeMethodInfo *)pMethInfo;
 
     size_t unwindDataBlobSize;
-    PTR_VOID pUnwindDataBlob = GetUnwindDataBlob(m_moduleBase, pMethodInfo->runtimeFunction, &unwindDataBlobSize);
+    PTR_VOID pUnwindDataBlob;
+
+    // If we are in cold code, use hot main runtime function to check for EH info
+    if ((m_nHotColdMap > 0) && (pMethodInfo->runtimeFunction->BeginAddress >= m_pHotColdMap[0]))
+    {
+        ASSERT(pMethodInfo->mainRuntimeFunction->BeginAddress < m_pHotColdMap[0]);
+        pUnwindDataBlob = GetUnwindDataBlob(m_moduleBase, pMethodInfo->mainRuntimeFunction, &unwindDataBlobSize);
+    }
+    else
+    {
+        pUnwindDataBlob = GetUnwindDataBlob(m_moduleBase, pMethodInfo->runtimeFunction, &unwindDataBlobSize);
+    }
+
 
     uint8_t unwindBlockFlags = *(dac_cast<DPTR(uint8_t)>(pUnwindDataBlob) + unwindDataBlobSize);
 
@@ -344,9 +458,58 @@ uint32_t CoffNativeCodeManager::GetCodeOffset(MethodInfo* pMethodInfo, PTR_VOID 
         p += sizeof(int32_t);
 
     *gcInfo = p;
+    TADDR currentAddress = dac_cast<TADDR>(address);
+
+//     // Determine if address is in cold code section
+//     if ((m_nHotColdMap > 0) && (pNativeMethodInfo->runtimeFunction->BeginAddress >= m_pHotColdMap[0]))
+//     {
+//         uint32_t currentMethodIndex = (uint32_t)(pNativeMethodInfo->mainRuntimeFunction - m_pRuntimeFunctionTable);
+//         ASSERT((int)currentMethodIndex == LookupUnwindInfoForMethod(
+//             (uint32_t)(currentAddress - m_moduleBase), m_pRuntimeFunctionTable, 0, m_nRuntimeFunctionTable - 1));
+
+//         // Get the first cold RUNTIME_FUNCTION entry for this method
+//         PTR_RUNTIME_FUNCTION pFirstColdRuntimeFunction;
+// #if defined(TARGET_AMD64)
+//         // RUNTIME_FUNCTION entries with chained unwind info will be first cold entry
+//         // (and there can only be one RUNTIME_FUNCTION entry with chained unwind info per method)
+//         pUnwindDataBlob = GetUnwindDataBlob(m_moduleBase, pNativeMethodInfo->runtimeFunction, &unwindDataBlobSize);
+//         if (((PTR_UNWIND_INFO)pUnwindDataBlob)->Flags & UNW_FLAG_CHAININFO)
+//         {
+//             pFirstColdRuntimeFunction = pNativeMethodInfo->runtimeFunction;
+//         }
+//         else
+// #endif
+//         {
+//             int lookupIndex = LookupHotColdMapping(m_pHotColdMap, m_nHotColdMap, (int)currentMethodIndex);
+//             ASSERT(lookupIndex >= 0);       // Cold RUNTIME_FUNCTION entry should exist
+//             ASSERT((lookupIndex % 2) == 0); // lookupIndex should be for cold RUNTIME_FUNCTION entry
+//             pFirstColdRuntimeFunction = m_pRuntimeFunctionTable + m_pHotColdMap[lookupIndex];
+//         }
+
+//         uint32_t firstColdMethodIndex = m_pHotColdMap[0];
+
+//         // Determine the hot code size by summing the sizes of the hot RUNTIME_FUNCTIONS in this method
+//         PTR_RUNTIME_FUNCTION pHotRuntimeFunction = pNativeMethodInfo->mainRuntimeFunction;
+//         uint32_t hotSectionSize = 0;
+
+//         // TODO: Cache hotSectionSize somewhere so we don't have to recalculate each time?
+//         do {
+//             hotSectionSize += (pHotRuntimeFunction->EndAddress - pHotRuntimeFunction->BeginAddress);
+//             pHotRuntimeFunction++;
+//             currentMethodIndex++;
+//             pUnwindDataBlob = GetUnwindDataBlob(m_moduleBase, pHotRuntimeFunction, &unwindDataBlobSize);
+//             unwindBlockFlags = *(dac_cast<PTR_UInt8>(pUnwindDataBlob) + unwindDataBlobSize);
+//             // Once we reach the next UBF_FUNC_KIND_ROOT, we have hit the start of the next hot method
+//             // Edge case: we hit the first cold RUNTIME_FUNCTION entry
+//         } while (((unwindBlockFlags & UBF_FUNC_KIND_MASK) != UBF_FUNC_KIND_ROOT)
+//             && (currentMethodIndex < firstColdMethodIndex));
+
+//         TADDR coldStartAddress = m_moduleBase + pFirstColdRuntimeFunction->BeginAddress;
+//         return (uint32_t)(hotSectionSize + (currentAddress - coldStartAddress));
+//     }
 
     TADDR methodStartAddress = m_moduleBase + pNativeMethodInfo->mainRuntimeFunction->BeginAddress;
-    return (uint32_t)(dac_cast<TADDR>(address) - methodStartAddress);
+    return (uint32_t)(currentAddress - methodStartAddress);
 }
 
 bool CoffNativeCodeManager::IsSafePoint(PTR_VOID pvAddress)
@@ -424,7 +587,19 @@ uintptr_t CoffNativeCodeManager::GetConservativeUpperBoundForOutgoingArgs(Method
     CoffNativeMethodInfo* pNativeMethodInfo = (CoffNativeMethodInfo *) pMethodInfo;
 
     size_t unwindDataBlobSize;
-    PTR_VOID pUnwindDataBlob = GetUnwindDataBlob(m_moduleBase, pNativeMethodInfo->runtimeFunction, &unwindDataBlobSize);
+    PTR_VOID pUnwindDataBlob;
+
+    // If we are in cold code, get hot main unwind info to check flags
+    if ((m_nHotColdMap > 0) && (pNativeMethodInfo->runtimeFunction->BeginAddress >= m_pHotColdMap[0]))
+    {
+        ASSERT(pNativeMethodInfo->mainRuntimeFunction->BeginAddress < m_pHotColdMap[0]);
+        pUnwindDataBlob = GetUnwindDataBlob(m_moduleBase, pNativeMethodInfo->mainRuntimeFunction, &unwindDataBlobSize);
+    }
+    else
+    {
+        pUnwindDataBlob = GetUnwindDataBlob(m_moduleBase, pNativeMethodInfo->runtimeFunction, &unwindDataBlobSize);
+    }
+
     PTR_UInt8 p = dac_cast<PTR_UInt8>(pUnwindDataBlob) + unwindDataBlobSize;
     uint8_t unwindBlockFlags = *p++;
 
@@ -535,7 +710,18 @@ bool CoffNativeCodeManager::UnwindStackFrame(MethodInfo *    pMethodInfo,
     CoffNativeMethodInfo * pNativeMethodInfo = (CoffNativeMethodInfo *)pMethodInfo;
 
     size_t unwindDataBlobSize;
-    PTR_VOID pUnwindDataBlob = GetUnwindDataBlob(m_moduleBase, pNativeMethodInfo->runtimeFunction, &unwindDataBlobSize);
+    PTR_VOID pUnwindDataBlob;
+
+    // If we are in cold code, get hot main unwind info to check flags
+    if ((m_nHotColdMap > 0) && (pNativeMethodInfo->runtimeFunction->BeginAddress >= m_pHotColdMap[0]))
+    {
+        ASSERT(pNativeMethodInfo->mainRuntimeFunction->BeginAddress < m_pHotColdMap[0]);
+        pUnwindDataBlob = GetUnwindDataBlob(m_moduleBase, pNativeMethodInfo->mainRuntimeFunction, &unwindDataBlobSize);
+    }
+    else
+    {
+        pUnwindDataBlob = GetUnwindDataBlob(m_moduleBase, pNativeMethodInfo->runtimeFunction, &unwindDataBlobSize);
+    }
 
     PTR_UInt8 p = dac_cast<PTR_UInt8>(pUnwindDataBlob) + unwindDataBlobSize;
 
@@ -627,7 +813,7 @@ bool CoffNativeCodeManager::UnwindStackFrame(MethodInfo *    pMethodInfo,
     SIZE_T  EstablisherFrame;
     PVOID   HandlerData;
 
-    RtlVirtualUnwind(NULL,
+    RtlVirtualUnwind((((PTR_UNWIND_INFO)pUnwindDataBlob)->Flags & UNW_FLAG_CHAININFO) ? UNW_FLAG_CHAININFO : NULL,
                     dac_cast<TADDR>(m_moduleBase),
                     pRegisterSet->IP,
                     (PRUNTIME_FUNCTION)pNativeMethodInfo->runtimeFunction,
@@ -722,12 +908,22 @@ bool CoffNativeCodeManager::GetReturnAddressHijackInfo(MethodInfo *    pMethodIn
 
     uint8_t unwindBlockFlags = *p++;
 
-    if ((unwindBlockFlags & UBF_FUNC_HAS_ASSOCIATED_DATA) != 0)
-        p += sizeof(int32_t);
-
     // Check whether this is a funclet
     if ((unwindBlockFlags & UBF_FUNC_KIND_MASK) != UBF_FUNC_KIND_ROOT)
         return false;
+
+    // If we are in cold code, get hot main unwind info to check flags
+    if ((m_nHotColdMap > 0) && (pNativeMethodInfo->runtimeFunction->BeginAddress >= m_pHotColdMap[0]))
+    {
+        ASSERT(pNativeMethodInfo->mainRuntimeFunction->BeginAddress < m_pHotColdMap[0]);
+        pUnwindDataBlob = GetUnwindDataBlob(m_moduleBase, pNativeMethodInfo->mainRuntimeFunction, &unwindDataBlobSize);
+        p = dac_cast<PTR_UInt8>(pUnwindDataBlob) + unwindDataBlobSize;
+        unwindBlockFlags = *p++;
+    }
+
+    if ((unwindBlockFlags & UBF_FUNC_HAS_ASSOCIATED_DATA) != 0)
+        p += sizeof(int32_t);
+
 
     // Skip hijacking a reverse-pinvoke method - it doesn't get us much because we already synchronize
     // with the GC on the way back to native code.
@@ -883,6 +1079,8 @@ bool CoffNativeCodeManager::EHEnumInit(MethodInfo * pMethodInfo, PTR_VOID * pMet
     pEnumState->uClause = 0;
     pEnumState->nClauses = VarInt::ReadUnsigned(pEnumState->pEHInfo);
 
+    // EHEnumNext() might need current MethodInfo to fix cold exception handler offset
+    m_pCurrentMethodWithEH = pNativeMethodInfo;
     return true;
 }
 
@@ -897,10 +1095,19 @@ bool CoffNativeCodeManager::EHEnumNext(EHEnumState * pEHEnumState, EHClause * pE
     pEnumState->uClause++;
 
     pEHClauseOut->m_tryStartOffset = VarInt::ReadUnsigned(pEnumState->pEHInfo);
-
     uint32_t tryEndDeltaAndClauseKind = VarInt::ReadUnsigned(pEnumState->pEHInfo);
     pEHClauseOut->m_clauseKind = (EHClauseKind)(tryEndDeltaAndClauseKind & 0x3);
     pEHClauseOut->m_tryEndOffset = pEHClauseOut->m_tryStartOffset + (tryEndDeltaAndClauseKind >> 2);
+
+    uint32_t handlerStartOffset = VarInt::ReadUnsigned(pEnumState->pEHInfo);
+
+    // If we have cold code, we might need to fix up the exception handler's offset
+    if (m_nHotColdMap > 0)
+    {
+        CalculateColdHandlerOffset(handlerStartOffset);
+    }
+
+    pEHClauseOut->m_handlerAddress = pEnumState->pMethodStartAddress + handlerStartOffset;
 
     // For each clause, we have up to 4 integers:
     //      1)  try start offset
@@ -909,13 +1116,11 @@ bool CoffNativeCodeManager::EHEnumNext(EHEnumState * pEHEnumState, EHClause * pE
     //      4a) if (typed)                       { type RVA }
     //      4b) if (filter)                      { filter start offset }
     //
-    // The first two integers have already been decoded
+    // The first three integers have already been decoded
 
     switch (pEHClauseOut->m_clauseKind)
     {
     case EH_CLAUSE_TYPED:
-        pEHClauseOut->m_handlerAddress = pEnumState->pMethodStartAddress + VarInt::ReadUnsigned(pEnumState->pEHInfo);
-
         // Read target type
         {
             // @TODO: Compress EHInfo using type table index scheme
@@ -925,17 +1130,68 @@ bool CoffNativeCodeManager::EHEnumNext(EHEnumState * pEHEnumState, EHClause * pE
         }
         break;
     case EH_CLAUSE_FAULT:
-        pEHClauseOut->m_handlerAddress = pEnumState->pMethodStartAddress + VarInt::ReadUnsigned(pEnumState->pEHInfo);
         break;
     case EH_CLAUSE_FILTER:
-        pEHClauseOut->m_handlerAddress = pEnumState->pMethodStartAddress + VarInt::ReadUnsigned(pEnumState->pEHInfo);
-        pEHClauseOut->m_filterAddress = pEnumState->pMethodStartAddress + VarInt::ReadUnsigned(pEnumState->pEHInfo);
+        {
+            uint32_t filterStartOffset = VarInt::ReadUnsigned(pEnumState->pEHInfo);
+
+            // If we have cold code, we might need to fix up the exception handler's offset
+            if (m_nHotColdMap > 0)
+            {
+                CalculateColdHandlerOffset(filterStartOffset);
+            }
+
+            pEHClauseOut->m_filterAddress = pEnumState->pMethodStartAddress + filterStartOffset;
+        }
         break;
     default:
         UNREACHABLE_MSG("unexpected EHClauseKind");
     }
 
     return true;
+}
+
+void CoffNativeCodeManager::CalculateColdHandlerOffset(uint32_t & handlerStartOffset)
+{
+    ASSERT(m_pCurrentMethodWithEH != NULL);
+    PTR_RUNTIME_FUNCTION pRuntimeFunction = m_pCurrentMethodWithEH->mainRuntimeFunction;
+    DWORD hotBeginAddress = pRuntimeFunction->BeginAddress;
+    ASSERT(hotBeginAddress < m_pHotColdMap[0]);
+    uint32_t handlerStartRva = hotBeginAddress + handlerStartOffset;
+
+    // Find next main runtime function entry, or first cold entry if we started at the last hot main entry
+    for (pRuntimeFunction++; pRuntimeFunction->BeginAddress < m_pHotColdMap[0]; pRuntimeFunction++)
+    {
+        size_t unwindDataBlobSize;
+        PTR_VOID pUnwindDataBlob = GetUnwindDataBlob(m_moduleBase, pRuntimeFunction, &unwindDataBlobSize);
+        uint8_t unwindBlockFlags = *(dac_cast<DPTR(uint8_t)>(pUnwindDataBlob) + unwindDataBlobSize);
+        if ((unwindBlockFlags & UBF_FUNC_KIND_MASK) == UBF_FUNC_KIND_ROOT)
+        {
+            break;
+        }
+    }
+
+#if defined(TARGET_ARM64)
+    // TODO: RUNTIME_FUNCTION does not have EndAddress on ARM64
+    PORTABILITY_ASSERT("ARM64 hot/cold splitting");
+#else
+    // Now back up to get the last entry in the hot section of this method
+    pRuntimeFunction--;
+
+    // If handler is in cold section, we need to recalculate its start offset
+    if (handlerStartRva >= pRuntimeFunction->EndAddress)
+    {
+        DWORD hotCodeSize = pRuntimeFunction->EndAddress - hotBeginAddress;
+        uint32_t handlerOffsetFromColdBegin = handlerStartOffset - hotCodeSize;
+
+        DWORD coldBeginAddress = LookupHotColdMapping((uint32_t)hotBeginAddress, m_pHotColdMap, m_nHotColdMap);
+        ASSERT(coldBeginAddress >= m_pHotColdMap[0]);
+        DWORD coldBeginOffsetFromStart = coldBeginAddress - hotBeginAddress;
+
+        // Handler offset = hot code length + gap between hot/cold sections + offset from start of cold code
+        handlerStartOffset = coldBeginOffsetFromStart + handlerOffsetFromColdBegin;
+    }
+#endif
 }
 
 PTR_VOID CoffNativeCodeManager::GetOsModuleHandle()
@@ -974,9 +1230,32 @@ PTR_VOID CoffNativeCodeManager::GetAssociatedData(PTR_VOID ControlPC)
         return NULL;
 
     PTR_RUNTIME_FUNCTION pRuntimeFunction = m_pRuntimeFunctionTable + MethodIndex;
-
     size_t unwindDataBlobSize;
     PTR_VOID pUnwindDataBlob = GetUnwindDataBlob(m_moduleBase, pRuntimeFunction, &unwindDataBlobSize);
+
+    // If we are in cold code, get hot main unwind info to check flags
+    if ((m_nHotColdMap > 0) && (pRuntimeFunction->BeginAddress >= m_pHotColdMap[0]))
+    {
+#if defined(TARGET_AMD64)
+        PTR_UNWIND_INFO pUnwindInfo = (PTR_UNWIND_INFO)pUnwindDataBlob;
+        if (pUnwindInfo->Flags & UNW_FLAG_CHAININFO)
+        {
+            pUnwindDataBlob = GetUnwindDataBlob(
+                m_moduleBase, (PTR_RUNTIME_FUNCTION)&(pUnwindInfo->UnwindCode), &unwindDataBlobSize);
+        }
+        else
+#endif
+        {
+            DWORD hotBeginAddress = LookupHotColdMapping(
+                pRuntimeFunction->BeginAddress, m_pHotColdMap, m_nHotColdMap);
+            ASSERT(hotBeginAddress < m_pHotColdMap[0]);
+            MethodIndex = LookupUnwindInfoForMethod(
+                (uint32_t)hotBeginAddress, m_pRuntimeFunctionTable, 0, m_nRuntimeFunctionTable - 1);
+            ASSERT(MethodIndex >= 0);
+            pRuntimeFunction = m_pRuntimeFunctionTable + MethodIndex;
+            pUnwindDataBlob = GetUnwindDataBlob(m_moduleBase, pRuntimeFunction, &unwindDataBlobSize);
+        }
+    }
 
     PTR_UInt8 p = dac_cast<PTR_UInt8>(pUnwindDataBlob) + unwindDataBlobSize;
 
@@ -995,18 +1274,42 @@ extern "C"
 bool RhRegisterOSModule(void * pModule,
                         void * pvManagedCodeStartRange, uint32_t cbManagedCodeRange,
                         void * pvUnboxingStubsStartRange, uint32_t cbUnboxingStubsRange,
-                        void ** pClasslibFunctions, uint32_t nClasslibFunctions)
+                        void ** pClasslibFunctions, uint32_t nClasslibFunctions,
+                        intptr_t * modules, int count)
 {
     PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)pModule;
     PIMAGE_NT_HEADERS pNTHeaders = (PIMAGE_NT_HEADERS)((TADDR)pModule + pDosHeader->e_lfanew);
 
-    IMAGE_DATA_DIRECTORY * pRuntimeFunctions = &(pNTHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXCEPTION]);
+    PIMAGE_DATA_DIRECTORY pRuntimeFunctions = &(pNTHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXCEPTION]);
+
+    int hotColdMapSizeInBytes = 0;
+    DWORD * pHotColdMap = nullptr;
+    for (int i = 0; (pHotColdMap == nullptr) && (i < count); i++)
+    {
+        if (modules[i] != 0)
+        {
+            pHotColdMap = (DWORD *)LookupModuleSection(
+                (ReadyToRunHeader *)modules[i],
+                ReadyToRunSectionType::NativeHotColdMap,
+                &hotColdMapSizeInBytes);
+        }
+    }
+
+    uint32_t nRuntimeFunctionTable = pRuntimeFunctions->Size / sizeof(RUNTIME_FUNCTION);
+    uint32_t nHotColdMap = (uint32_t)(hotColdMapSizeInBytes / sizeof(DWORD));
+
+    ASSERT((pHotColdMap == nullptr) == (hotColdMapSizeInBytes == 0));
+
+    // HotColdMap contains pairs of indices, so it should have an even size
+    ASSERT((nHotColdMap % 2) == 0);
+
+    // HotColdMap contains RUNTIME_FUNCTION indices, so it cannot be bigger than the RUNTIME_FUNCTION table
+    ASSERT(nHotColdMap <= nRuntimeFunctionTable);
 
     NewHolder<CoffNativeCodeManager> pCoffNativeCodeManager = new (nothrow) CoffNativeCodeManager((TADDR)pModule,
         pvManagedCodeStartRange, cbManagedCodeRange,
         dac_cast<PTR_RUNTIME_FUNCTION>((TADDR)pModule + pRuntimeFunctions->VirtualAddress),
-        pRuntimeFunctions->Size / sizeof(RUNTIME_FUNCTION),
-        pClasslibFunctions, nClasslibFunctions);
+        nRuntimeFunctionTable, pHotColdMap, nHotColdMap, pClasslibFunctions, nClasslibFunctions);
 
     if (pCoffNativeCodeManager == nullptr)
         return false;

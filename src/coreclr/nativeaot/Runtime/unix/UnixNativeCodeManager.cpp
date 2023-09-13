@@ -932,7 +932,8 @@ extern "C"
 bool RhRegisterOSModule(void * pModule,
                         void * pvManagedCodeStartRange, uint32_t cbManagedCodeRange,
                         void * pvUnboxingStubsStartRange, uint32_t cbUnboxingStubsRange,
-                        void ** pClasslibFunctions, uint32_t nClasslibFunctions)
+                        void ** pClasslibFunctions, uint32_t nClasslibFunctions,
+                        intptr_t * modules, int count)
 {
     NewHolder<UnixNativeCodeManager> pUnixNativeCodeManager = new (nothrow) UnixNativeCodeManager((TADDR)pModule,
         pvManagedCodeStartRange, cbManagedCodeRange,

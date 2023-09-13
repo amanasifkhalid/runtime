@@ -25,7 +25,14 @@ namespace ILCompiler.DependencyAnalysis
             get;
         }
 
-        ISymbolNode HotCodeNode
+        // Only used by MethodColdCodeNode; null for MethodCodeNode
+        INodeWithCodeInfo HotCodeNode
+        {
+            get;
+        }
+
+        // Only used by MethodCodeNode with cold code; null for MethodColdCodeNode
+        INodeWithCodeInfo ColdCodeNode
         {
             get;
         }

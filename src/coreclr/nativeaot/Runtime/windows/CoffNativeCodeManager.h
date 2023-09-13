@@ -31,6 +31,13 @@ struct T_RUNTIME_FUNCTION {
 
 typedef DPTR(T_RUNTIME_FUNCTION) PTR_RUNTIME_FUNCTION;
 
+struct CoffNativeMethodInfo
+{
+    PTR_RUNTIME_FUNCTION mainRuntimeFunction;
+    PTR_RUNTIME_FUNCTION runtimeFunction;
+    bool executionAborted;
+};
+
 class CoffNativeCodeManager : public ICodeManager
 {
     TADDR m_moduleBase;
@@ -41,6 +48,16 @@ class CoffNativeCodeManager : public ICodeManager
     PTR_RUNTIME_FUNCTION m_pRuntimeFunctionTable;
     uint32_t m_nRuntimeFunctionTable;
 
+    // Keeps track of the MethodInfo passed into EHEnumInit() for use in CalculateColdHandlerOffset().
+    // EHEnumNext() calls this method to potentially adjust an exception handler's offset
+    // if it is in cold code. We could implement this without m_pCurrentMethodWithEH,
+    // but CalculateColdHandlerOffset() would need an extra call to LookupUnwindInfoForMethod() instead.
+    // So we trade a little memory for better runtime.
+    CoffNativeMethodInfo * m_pCurrentMethodWithEH;
+
+    DWORD * m_pHotColdMap;
+    uint32_t m_nHotColdMap;
+
     PTR_PTR_VOID m_pClasslibFunctions;
     uint32_t m_nClasslibFunctions;
 
@@ -48,6 +65,7 @@ public:
     CoffNativeCodeManager(TADDR moduleBase,
                           PTR_VOID pvManagedCodeStartRange, uint32_t cbManagedCodeRange,
                           PTR_RUNTIME_FUNCTION pRuntimeFunctionTable, uint32_t nRuntimeFunctionTable,
+                          DWORD * pHotColdMap, uint32_t nHotColdMap,
                           PTR_PTR_VOID pClasslibFunctions, uint32_t nClasslibFunctions);
     ~CoffNativeCodeManager();
 
@@ -103,4 +121,7 @@ public:
     PTR_VOID GetAssociatedData(PTR_VOID ControlPC);
 
     PTR_VOID GetOsModuleHandle();
+
+private:
+    void CalculateColdHandlerOffset(uint32_t & handlerStartOffset);
 };

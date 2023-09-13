@@ -49,23 +49,7 @@ TypeManager::TypeManager(HANDLE osModule, ReadyToRunHeader * pHeader, void** pCl
 
 void * TypeManager::GetModuleSection(ReadyToRunSectionType sectionId, int * length)
 {
-    ModuleInfoRow * pModuleInfoRows = (ModuleInfoRow *)(m_pHeader + 1);
-
-    ASSERT(m_pHeader->EntrySize == sizeof(ModuleInfoRow));
-
-    // TODO: Binary search
-    for (int i = 0; i < m_pHeader->NumberOfSections; i++)
-    {
-        ModuleInfoRow * pCurrent = pModuleInfoRows + i;
-        if ((int32_t)sectionId == pCurrent->SectionId)
-        {
-            *length = pCurrent->GetLength();
-            return pCurrent->Start;
-        }
-    }
-
-    *length = 0;
-    return nullptr;
+   return LookupModuleSection(m_pHeader, sectionId, length);
 }
 
 void * TypeManager::GetClasslibFunction(ClasslibFunctionId functionId)
@@ -76,23 +60,6 @@ void * TypeManager::GetClasslibFunction(ClasslibFunctionId functionId)
         return nullptr;
 
     return m_pClasslibFunctions[id];
-}
-
-bool TypeManager::ModuleInfoRow::HasEndPointer()
-{
-    return Flags & (int32_t)ModuleInfoFlags::HasEndPointer;
-}
-
-int TypeManager::ModuleInfoRow::GetLength()
-{
-    if (HasEndPointer())
-    {
-        return (int)((uint8_t*)End - (uint8_t*)Start);
-    }
-    else
-    {
-        return sizeof(void*);
-    }
 }
 
 HANDLE TypeManager::GetOsModuleHandle()

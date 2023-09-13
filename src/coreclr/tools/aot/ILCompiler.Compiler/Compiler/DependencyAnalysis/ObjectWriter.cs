@@ -550,18 +550,19 @@ namespace ILCompiler.DependencyAnalysis
                 // Check for chained unwind info (cold code only)
                 const byte UNW_FLAG_CHAININFO = 4;
                 const byte FlagsShift = 3;
-                if ((blob[0] & (UNW_FLAG_CHAININFO << FlagsShift)) != 0)
+                if ((_nodeFactory.Target.Architecture == TargetArchitecture.X64)
+                    && ((blob[0] & (UNW_FLAG_CHAININFO << FlagsShift)) != 0))
                 {
                     Debug.Assert(nodeWithCodeInfo.HotCodeNode != null);
 
                     // Emit RUNTIME_FUNCTION entry for corresponding hot code (start offset, end offset, unwind info address)
-                    EmitSymbolReference(nodeWithCodeInfo.HotCodeNode, 0, RelocType.IMAGE_REL_BASED_ABSOLUTE);
-                    EmitSymbolReference(nodeWithCodeInfo.HotCodeNode, ((INodeWithCodeInfo)nodeWithCodeInfo.HotCodeNode).FrameInfos[0].EndOffset, RelocType.IMAGE_REL_BASED_ABSOLUTE);
+                    EmitSymbolReference((ISymbolNode)nodeWithCodeInfo.HotCodeNode, 0, RelocType.IMAGE_REL_BASED_ABSOLUTE);
+                    EmitSymbolReference((ISymbolNode)nodeWithCodeInfo.HotCodeNode, nodeWithCodeInfo.HotCodeNode.FrameInfos[0].EndOffset, RelocType.IMAGE_REL_BASED_ABSOLUTE);
 
                     // Build blobSymbolName for target unwind info
                     _sb.Clear().Append(_nodeFactory.NameMangler.CompilationUnitPrefix).Append("_unwind0");
                     AppendExternCPrefix(_sb);
-                    nodeWithCodeInfo.HotCodeNode.AppendMangledName(_nodeFactory.NameMangler, _sb);
+                    ((ISymbolNode)nodeWithCodeInfo.HotCodeNode).AppendMangledName(_nodeFactory.NameMangler, _sb);
                     EmitSymbolRef(_sb.Append('\0'), RelocType.IMAGE_REL_BASED_ABSOLUTE);
                 }
 
@@ -589,6 +590,11 @@ namespace ILCompiler.DependencyAnalysis
                 EmitWinFrameInfo(start, end, len, blobSymbolName);
 
                 EnsureCurrentSection();
+            }
+
+            if (nodeWithCodeInfo.HotCodeNode != null)
+            {
+                _nodeFactory.HotColdMap.AddEntry(nodeWithCodeInfo);
             }
         }
 

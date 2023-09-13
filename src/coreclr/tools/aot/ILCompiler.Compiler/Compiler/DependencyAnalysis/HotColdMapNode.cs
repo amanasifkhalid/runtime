@@ -14,14 +14,11 @@ namespace ILCompiler.DependencyAnalysis
         private int? _size;
         int INodeWithSize.Size => _size.Value;
 
-        // List of (hot MethodIndex, number of cold FrameInfos)
-        // Once we know the total number of hot runtime functions, we can use
-        // each cold runtime function's size (in FrameInfos) to calculate its MethodIndex
-        private List<Tuple<uint, uint>> _mapping = new List<Tuple<uint, uint>>();
+        private List<INodeWithCodeInfo> _mapping = new List<INodeWithCodeInfo>();
 
-        public uint NumHotRuntimeFunctions { get; set; }
-
-        public override int ClassCode => 28963035;
+        // ClassCode is one greater than MethodColdCodeNode, to guarantee all code nodes are emitted
+        // before HotColdMap is generated.
+        public override int ClassCode => 788492409;
 
         public int Offset => 0;
 
@@ -33,15 +30,16 @@ namespace ILCompiler.DependencyAnalysis
 
         protected override string GetName(NodeFactory factory) => this.GetMangledName(factory.NameMangler);
 
+        public void AddEntry(INodeWithCodeInfo coldCodeNode)
+        {
+            Debug.Assert(coldCodeNode.HotCodeNode != null);
+            _mapping.Add(coldCodeNode);
+        }
+
         public void AppendMangledName(NameMangler nameMangler, Utf8StringBuilder sb)
         {
             sb.Append(nameMangler.CompilationUnitPrefix);
             sb.Append("__HotColdMap");
-        }
-
-        public void Add(uint hotMethodIndex, uint numColdFrameInfos)
-        {
-            _mapping.Add(Tuple.Create(hotMethodIndex, numColdFrameInfos));
         }
 
         public override ObjectData GetData(NodeFactory factory, bool relocsOnly = false)
@@ -53,13 +51,12 @@ namespace ILCompiler.DependencyAnalysis
             ObjectDataBuilder builder = new ObjectDataBuilder(factory, relocsOnly);
             builder.AddSymbol(this);
 
-            uint nextColdMethodIndex = NumHotRuntimeFunctions;
-            foreach (var pair in _mapping)
+            foreach (INodeWithCodeInfo coldCodeNode in _mapping)
             {
-                // Mapping: cold MethodIndex, followed by hot MethodIndex
-                builder.EmitUInt(nextColdMethodIndex);
-                builder.EmitUInt(pair.Item1);
-                nextColdMethodIndex += pair.Item2;
+                builder.EmitReloc(
+                    (ISymbolNode)coldCodeNode, RelocType.IMAGE_REL_BASED_ABSOLUTE, delta: factory.Target.CodeDelta);
+                builder.EmitReloc(
+                    (ISymbolNode)coldCodeNode.HotCodeNode, RelocType.IMAGE_REL_BASED_ABSOLUTE, delta: factory.Target.CodeDelta);
             }
 
             _size = builder.CountBytes;

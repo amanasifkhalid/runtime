@@ -21,19 +21,6 @@ public:
     void * GetModuleSection(ReadyToRunSectionType sectionId, int * length);
     HANDLE GetOsModuleHandle();
     void* GetClasslibFunction(ClasslibFunctionId functionId);
-
-private:
-
-    struct ModuleInfoRow
-    {
-        int32_t SectionId;
-        int32_t Flags;
-        void * Start;
-        void * End;
-
-        bool HasEndPointer();
-        int GetLength();
-    };
 };
 
 // TypeManagerHandle represents an AOT module in MRT based runtimes.

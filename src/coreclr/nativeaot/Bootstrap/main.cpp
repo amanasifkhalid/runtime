@@ -99,7 +99,9 @@ extern "C" void RhSetRuntimeInitializationCallback(int (*fPtr)());
 extern "C" bool RhRegisterOSModule(void * pModule,
     void * pvManagedCodeStartRange, uint32_t cbManagedCodeRange,
     void * pvUnboxingStubsStartRange, uint32_t cbUnboxingStubsRange,
-    void ** pClasslibFunctions, uint32_t nClasslibFunctions);
+    void ** pClasslibFunctions, uint32_t nClasslibFunctions,
+    intptr_t * modules, int count
+    );
 
 extern "C" void* PalGetModuleHandleFromPointer(void* pointer);
 
@@ -174,7 +176,8 @@ static int InitializeRuntime()
         osModule,
         (void*)&__managedcode_a, (uint32_t)((char *)&__managedcode_z - (char*)&__managedcode_a),
         (void*)&__unbox_a, (uint32_t)((char *)&__unbox_z - (char*)&__unbox_a),
-        (void **)&c_classlibFunctions, _countof(c_classlibFunctions)))
+        (void **)&c_classlibFunctions, _countof(c_classlibFunctions),
+        (intptr_t *)__modules_a, (int)((__modules_z - __modules_a))))
     {
         return -1;
     }

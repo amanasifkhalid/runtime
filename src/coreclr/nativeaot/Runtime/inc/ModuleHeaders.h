@@ -53,6 +53,7 @@ enum class ReadyToRunSectionType
     // 210 is unused - it was used by ThreadStaticIndex
     // 211 is unused - it was used by LoopHijackFlag
     ImportAddressTables         = 212,
+    NativeHotColdMap            = 214,
 
     // Sections 300 - 399 are reserved for RhFindBlob backwards compatibility
     ReadonlyBlobRegionStart     = 300,
@@ -63,3 +64,60 @@ enum class ModuleInfoFlags
 {
     HasEndPointer               = 0x1,
 };
+
+struct ModuleInfoRow
+{
+    int32_t SectionId;
+    int32_t Flags;
+    void * Start;
+    void * End;
+
+    bool HasEndPointer()
+    {
+        return Flags & (int32_t)ModuleInfoFlags::HasEndPointer;
+    }
+
+    int GetLength()
+    {
+        if (HasEndPointer())
+        {
+            return (int)((uint8_t*)End - (uint8_t*)Start);
+        }
+        else
+        {
+            return sizeof(void*);
+        }
+    }
+};
+
+static void * LookupModuleSection(ReadyToRunHeader * pHeader, ReadyToRunSectionType sectionId, int * length)
+{
+    ModuleInfoRow * pModuleInfoRows = (ModuleInfoRow *)(pHeader + 1);
+
+    ASSERT(pHeader->EntrySize == sizeof(ModuleInfoRow));
+
+    // TODO: Switch to linear search for small number of elements?
+    int low = 0;
+    int high = pHeader->NumberOfSections;
+    while (low < high)
+    {
+        int middle = low + (high - low) / 2;
+        ModuleInfoRow * pCurrent = pModuleInfoRows + middle;
+        if ((int32_t)sectionId == pCurrent->SectionId)
+        {
+            *length = pCurrent->GetLength();
+            return pCurrent->Start;
+        }
+        else if ((int32_t)sectionId < pCurrent->SectionId)
+        {
+            high = middle;
+        }
+        else
+        {
+            low = middle + 1;
+        }
+    }
+
+    *length = 0;
+    return nullptr;
+}

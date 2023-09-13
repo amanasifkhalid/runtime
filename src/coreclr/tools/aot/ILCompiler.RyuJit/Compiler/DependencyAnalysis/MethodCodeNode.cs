@@ -100,16 +100,13 @@ namespace ILCompiler.DependencyAnalysis
             if (this.ColdCodeNode != null)
             {
                 dependencies ??= new DependencyList();
-                dependencies.Add(this.ColdCodeNode, "cold");
+                dependencies.Add((MethodColdCodeNode)this.ColdCodeNode, "cold");
             }
 
             return dependencies;
         }
 
-        public override ObjectData GetData(NodeFactory factory, bool relocsOnly)
-        {
-            return _methodCode;
-        }
+        public override ObjectData GetData(NodeFactory factory, bool relocsOnly) => _methodCode;
 
         public bool IsSpecialUnboxingThunk => ((CompilerTypeSystemContext)Method.Context).IsSpecialUnboxingThunk(_method);
 
@@ -121,11 +118,11 @@ namespace ILCompiler.DependencyAnalysis
             return factory.MethodEntrypoint(nonUnboxingMethod, false);
         }
 
-        public MethodColdCodeNode ColdCodeNode { get; set; }
         public FrameInfo[] FrameInfos => _frameInfos;
         public byte[] GCInfo => _gcInfo;
         public MethodExceptionHandlingInfoNode EHInfo => _ehInfo;
-        public ISymbolNode HotCodeNode => null;
+        public INodeWithCodeInfo HotCodeNode => null;
+        public INodeWithCodeInfo ColdCodeNode { get; set; }
 
         public ISymbolNode GetAssociatedDataNode(NodeFactory factory)
         {

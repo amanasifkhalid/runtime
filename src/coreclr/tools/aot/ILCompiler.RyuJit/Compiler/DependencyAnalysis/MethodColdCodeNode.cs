@@ -57,12 +57,10 @@ namespace ILCompiler.DependencyAnalysis
         public byte[] GCInfo => null;
         public MethodExceptionHandlingInfoNode EHInfo => null;
         public DebugEHClauseInfo[] DebugEHClauseInfos => null;
-        public ISymbolNode HotCodeNode { get; set; }
+        public INodeWithCodeInfo ColdCodeNode => null;
+        public INodeWithCodeInfo HotCodeNode { get; set; }
 
-        public ISymbolNode GetAssociatedDataNode(NodeFactory factory)
-        {
-            return null;
-        }
+        public ISymbolNode GetAssociatedDataNode(NodeFactory factory) => null;
 
         public void InitializeFrameInfos(FrameInfo[] frameInfos)
         {
