@@ -832,8 +832,6 @@ ep_rt_thread_handle_t ep_rt_aot_thread_get_handle (void)
     return ThreadStore::GetCurrentThreadIfAvailable();
 }
 
-<<<<<<< HEAD
-=======
 ep_rt_thread_handle_t ep_rt_aot_setup_thread (void)
 {
     // This is expensive but need a valid thread that will only be used by EventPipe
@@ -841,7 +839,6 @@ ep_rt_thread_handle_t ep_rt_aot_setup_thread (void)
     return ThreadStore::GetCurrentThread();
 }
 
->>>>>>> 4b75f938a6a76a7dea177ca70de7b81878f14d33
 ep_rt_thread_id_t ep_rt_aot_thread_get_id (ep_rt_thread_handle_t thread_handle)
 {
     return thread_handle->GetPalThreadIdForLogging();
