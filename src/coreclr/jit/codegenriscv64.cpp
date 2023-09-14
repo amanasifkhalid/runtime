@@ -816,8 +816,8 @@ void CodeGen::genCaptureFuncletPrologEpilogInfo()
 
         if (compiler->lvaPSPSym != BAD_VAR_NUM)
         {
-            if (CallerSP_to_PSP_slot_delta !=
-                compiler->lvaGetCallerSPRelativeOffset(compiler->lvaPSPSym)) // for debugging
+            if (CallerSP_to_PSP_slot_delta != compiler->lvaGetCallerSPRelativeOffset(compiler->lvaPSPSym)) // for
+                                                                                                           // debugging
             {
                 printf("lvaGetCallerSPRelativeOffset(lvaPSPSym): %d\n",
                        compiler->lvaGetCallerSPRelativeOffset(compiler->lvaPSPSym));
@@ -3749,6 +3749,24 @@ void CodeGen::genCodeForJumpCompare(GenTreeOpCC* tree)
             emit->emitLoadImmediate(EA_PTRSIZE, REG_RA, imm);
             regs = (int)REG_RA << 5;
         }
+        else
+        {
+            if (cmpSize == EA_4BYTE)
+            {
+                regNumber tmpRegOp1 = rsGetRsvdReg();
+                assert(regOp1 != tmpRegOp1);
+                if (cond.IsUnsigned())
+                {
+                    emit->emitIns_R_R_I(INS_slli, EA_8BYTE, tmpRegOp1, regOp1, 32);
+                    emit->emitIns_R_R_I(INS_srli, EA_8BYTE, tmpRegOp1, tmpRegOp1, 32);
+                }
+                else
+                {
+                    emit->emitIns_R_R_I(INS_addiw, EA_8BYTE, tmpRegOp1, regOp1, 0);
+                }
+                regOp1 = tmpRegOp1;
+            }
+        }
 
         switch (cond.GetCode())
         {
@@ -5201,8 +5219,7 @@ void CodeGen::genPutArgSplit(GenTreePutArgSplit* treeNode)
             }
 
             // Pick a register to store intermediate values in for the to-stack
-            // copy. It must not conflict with addrReg. We try to prefer an
-            // argument register since those can always use thumb encoding.
+            // copy. It must not conflict with addrReg.
             valueReg = treeNode->GetRegNumByIdx(0);
             if (valueReg == addrReg)
             {
@@ -5212,7 +5229,6 @@ void CodeGen::genPutArgSplit(GenTreePutArgSplit* treeNode)
                 }
                 else
                 {
-                    // Prefer argument register that can always use thumb encoding.
                     valueReg = treeNode->GetRegNumByIdx(1);
                 }
             }
@@ -7146,35 +7162,6 @@ void CodeGen::instGen_MemoryBarrier(BarrierKind barrierKind)
     GetEmitter()->emitIns_I(INS_fence, EA_4BYTE, INS_BARRIER_FULL);
 }
 
-//-----------------------------------------------------------------------------------
-// genProfilingLeaveCallback: Generate the profiling function leave or tailcall callback.
-// Technically, this is not part of the epilog; it is called when we are generating code for a GT_RETURN node.
-//
-// Arguments:
-//     helper - which helper to call. Either CORINFO_HELP_PROF_FCN_LEAVE or CORINFO_HELP_PROF_FCN_TAILCALL
-//
-// Return Value:
-//     None
-//
-void CodeGen::genProfilingLeaveCallback(unsigned helper /*= CORINFO_HELP_PROF_FCN_LEAVE*/)
-{
-    assert((helper == CORINFO_HELP_PROF_FCN_LEAVE) || (helper == CORINFO_HELP_PROF_FCN_TAILCALL));
-
-    // Only hook if profiler says it's okay.
-    if (!compiler->compIsProfilerHookNeeded())
-    {
-        return;
-    }
-
-    compiler->info.compProfilerCallback = true;
-
-    // Need to save on to the stack level, since the helper call will pop the argument
-    unsigned saveStackLvl2 = genStackLevel;
-
-    /* Restore the stack level */
-    SetStackLevel(saveStackLvl2);
-}
-
 /*-----------------------------------------------------------------------------
  *
  *  Push/Pop any callee-saved registers we have used
@@ -7192,7 +7179,7 @@ void CodeGen::genPushCalleeSavedRegisters(regNumber initReg, bool* pInitRegZeroe
     }
 #endif
 
-    // On LA we push the FP (frame-pointer) here along with all other callee saved registers
+    // On RISCV64 we push the FP (frame-pointer) here along with all other callee saved registers
     if (isFramePointerUsed())
     {
         rsPushRegs |= RBM_FPBASE;
@@ -7866,7 +7853,7 @@ void CodeGen::genFnPrologCalleeRegArgs()
                     // the struct is a split struct.
                     assert(varDsc->GetArgReg() == REG_ARG_LAST && varDsc->GetOtherArgReg() == REG_STK);
 
-                    // For the LA's ABI, the split struct arg will be passed via `A7` and a stack slot on caller.
+                    // For the RISCV64's ABI, the split struct arg will be passed via `A7` and a stack slot on caller.
                     // But if the `A7` is stored on stack on the callee side, the whole split struct should be
                     // stored continuous on the stack on the callee side.
                     // So, after we save `A7` on the stack in prolog, it has to copy the stack slot of the split struct
@@ -7973,6 +7960,7 @@ void CodeGen::genFnPrologCalleeRegArgs()
                                                         0);
                             regArgNum--;
                             regArgMaskLive &= ~genRegMask((regNumber)regArg[j]);
+                            regArg[j] = 0;
                         }
                         else if (k == i)
                         {
@@ -8050,6 +8038,7 @@ void CodeGen::genFnPrologCalleeRegArgs()
                                                             (regNumber)regArg[i], (regNumber)regArg[i]);
                                 regArgNum--;
                                 regArgMaskLive &= ~genRegMask((regNumber)regArg[j]);
+                                regArg[j] = 0;
                                 if (regArgNum == 0)
                                 {
                                     break;
@@ -8086,6 +8075,7 @@ void CodeGen::genFnPrologCalleeRegArgs()
     assert(!regArgMaskLive);
 }
 
+#ifdef PROFILING_SUPPORTED
 //-----------------------------------------------------------------------------------
 // genProfilingEnterCallback: Generate the profiling function enter callback.
 //
@@ -8094,17 +8084,79 @@ void CodeGen::genFnPrologCalleeRegArgs()
 //     pInitRegZeroed - OUT parameter. *pInitRegZeroed set to 'false' if 'initReg' is
 //                      set to non-zero value after this call.
 //
-// Return Value:
-//     None
-//
 void CodeGen::genProfilingEnterCallback(regNumber initReg, bool* pInitRegZeroed)
 {
     assert(compiler->compGeneratingProlog);
 
-    // Give profiler a chance to back out of hooking this method
     if (!compiler->compIsProfilerHookNeeded())
     {
         return;
     }
+
+    ssize_t methHnd = (ssize_t)compiler->compProfilerMethHnd;
+    if (compiler->compProfilerMethHndIndirected)
+    {
+        instGen_Set_Reg_To_Imm(EA_PTR_DSP_RELOC, REG_PROFILER_ENTER_ARG_FUNC_ID, methHnd);
+        GetEmitter()->emitIns_R_R_I(INS_ld, EA_PTRSIZE, REG_PROFILER_ENTER_ARG_FUNC_ID, REG_PROFILER_ENTER_ARG_FUNC_ID,
+                                    0);
+    }
+    else
+    {
+        instGen_Set_Reg_To_Imm(EA_PTRSIZE, REG_PROFILER_ENTER_ARG_FUNC_ID, methHnd);
+    }
+
+    ssize_t callerSPOffset = -compiler->lvaToCallerSPRelativeOffset(0, isFramePointerUsed());
+    genInstrWithConstant(INS_addi, EA_PTRSIZE, REG_PROFILER_ENTER_ARG_CALLER_SP, genFramePointerReg(), callerSPOffset,
+                         REG_PROFILER_ENTER_ARG_CALLER_SP);
+
+    genEmitHelperCall(CORINFO_HELP_PROF_FCN_ENTER, 0, EA_UNKNOWN);
+
+    if ((genRegMask(initReg) & RBM_PROFILER_ENTER_TRASH))
+    {
+        *pInitRegZeroed = false;
+    }
 }
+
+//-----------------------------------------------------------------------------------
+// genProfilingLeaveCallback: Generate the profiling function leave or tailcall callback.
+// Technically, this is not part of the epilog; it is called when we are generating code for a GT_RETURN node.
+//
+// Arguments:
+//     helper - which helper to call. Either CORINFO_HELP_PROF_FCN_LEAVE or CORINFO_HELP_PROF_FCN_TAILCALL
+//
+void CodeGen::genProfilingLeaveCallback(unsigned helper /*= CORINFO_HELP_PROF_FCN_LEAVE*/)
+{
+    assert((helper == CORINFO_HELP_PROF_FCN_LEAVE) || (helper == CORINFO_HELP_PROF_FCN_TAILCALL));
+
+    if (!compiler->compIsProfilerHookNeeded())
+    {
+        return;
+    }
+
+    compiler->info.compProfilerCallback = true;
+
+    ssize_t methHnd = (ssize_t)compiler->compProfilerMethHnd;
+    if (compiler->compProfilerMethHndIndirected)
+    {
+        instGen_Set_Reg_To_Imm(EA_PTR_DSP_RELOC, REG_PROFILER_LEAVE_ARG_FUNC_ID, methHnd);
+        GetEmitter()->emitIns_R_R_I(INS_ld, EA_PTRSIZE, REG_PROFILER_LEAVE_ARG_FUNC_ID, REG_PROFILER_LEAVE_ARG_FUNC_ID,
+                                    0);
+    }
+    else
+    {
+        instGen_Set_Reg_To_Imm(EA_PTRSIZE, REG_PROFILER_LEAVE_ARG_FUNC_ID, methHnd);
+    }
+
+    gcInfo.gcMarkRegSetNpt(RBM_PROFILER_LEAVE_ARG_FUNC_ID);
+
+    ssize_t callerSPOffset = -compiler->lvaToCallerSPRelativeOffset(0, isFramePointerUsed());
+    genInstrWithConstant(INS_addi, EA_PTRSIZE, REG_PROFILER_LEAVE_ARG_CALLER_SP, genFramePointerReg(), callerSPOffset,
+                         REG_PROFILER_LEAVE_ARG_CALLER_SP);
+
+    gcInfo.gcMarkRegSetNpt(RBM_PROFILER_LEAVE_ARG_CALLER_SP);
+
+    genEmitHelperCall(helper, 0, EA_UNKNOWN);
+}
+#endif // PROFILING_SUPPORTED
+
 #endif // TARGET_RISCV64
