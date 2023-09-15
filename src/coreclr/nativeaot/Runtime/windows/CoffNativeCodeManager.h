@@ -123,7 +123,5 @@ public:
     PTR_VOID GetOsModuleHandle();
 
 private:
-    void CalculateColdHandlerOffset(uint32_t & handlerStartOffset);
-
     DWORD CalculateHotCodeSize(CoffNativeMethodInfo * pNativeMethodInfo);
 };

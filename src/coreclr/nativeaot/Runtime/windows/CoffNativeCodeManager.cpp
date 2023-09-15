@@ -465,7 +465,7 @@ uint32_t CoffNativeCodeManager::GetCodeOffset(MethodInfo* pMethodInfo, PTR_VOID 
     {
         // Calculate offset from beginning of cold section
         TADDR relativeAddress = currentAddress - m_moduleBase;
-        DWORD coldStartAddress;
+        DWORD coldBeginAddress;
 
 #if defined(TARGET_AMD64)
         // Chained unwind info means this is the first cold RUNTIME_FUNCTION entry for this method
@@ -473,21 +473,21 @@ uint32_t CoffNativeCodeManager::GetCodeOffset(MethodInfo* pMethodInfo, PTR_VOID 
             m_moduleBase, pNativeMethodInfo->runtimeFunction, &unwindDataBlobSize);
         if (pUnwindInfo->Flags & UNW_FLAG_CHAININFO)
         {
-            coldStartAddress = pNativeMethodInfo->runtimeFunction->BeginAddress;
+            coldBeginAddress = pNativeMethodInfo->runtimeFunction->BeginAddress;
         }
         else
 #endif
         {
-            coldStartAddress = LookupHotColdMapping(
+            coldBeginAddress = LookupHotColdMapping(
                 (uint32_t)pNativeMethodInfo->mainRuntimeFunction->BeginAddress, m_pHotColdMap, m_nHotColdMap);
         }
 
-        ASSERT(coldStartAddress >= m_pHotColdMap[0]);
-        ASSERT(relativeAddress >= coldStartAddress);
-        TADDR offsetFromColdBegin = relativeAddress - coldStartAddress;
+        ASSERT(coldBeginAddress >= m_pHotColdMap[0]);
+        ASSERT(relativeAddress >= coldBeginAddress);
+        TADDR offsetFromColdBegin = relativeAddress - coldBeginAddress;
         DWORD hotCodeSize = CalculateHotCodeSize(pNativeMethodInfo);
 
-        // Code offset = hot code size + offset from beginning of cold section
+        // New offset = hot code length + gap between hot/cold sections + offset from start of cold code
         return (uint32_t)(hotCodeSize + offsetFromColdBegin);
     }
 
@@ -774,7 +774,7 @@ bool CoffNativeCodeManager::UnwindStackFrame(MethodInfo *    pMethodInfo,
     SIZE_T  EstablisherFrame;
     PVOID   HandlerData;
 
-    RtlVirtualUnwind((((PTR_UNWIND_INFO)pUnwindDataBlob)->Flags & UNW_FLAG_CHAININFO) ? UNW_FLAG_CHAININFO : NULL,
+    RtlVirtualUnwind(NULL,
                     dac_cast<TADDR>(m_moduleBase),
                     pRegisterSet->IP,
                     (PRUNTIME_FUNCTION)pNativeMethodInfo->runtimeFunction,
@@ -1049,6 +1049,7 @@ bool CoffNativeCodeManager::EHEnumNext(EHEnumState * pEHEnumState, EHClause * pE
 {
     assert(pEHEnumState != NULL);
     assert(pEHClauseOut != NULL);
+    assert(m_pCurrentMethodWithEH != NULL);
 
     CoffEHEnumState * pEnumState = (CoffEHEnumState *)pEHEnumState;
     if (pEnumState->uClause >= pEnumState->nClauses)
@@ -1061,14 +1062,7 @@ bool CoffNativeCodeManager::EHEnumNext(EHEnumState * pEHEnumState, EHClause * pE
     pEHClauseOut->m_tryEndOffset = pEHClauseOut->m_tryStartOffset + (tryEndDeltaAndClauseKind >> 2);
 
     uint32_t handlerStartOffset = VarInt::ReadUnsigned(pEnumState->pEHInfo);
-
-    // If we have cold code, we might need to fix up the exception handler's offset
-    if (m_nHotColdMap > 0)
-    {
-        CalculateColdHandlerOffset(handlerStartOffset);
-    }
-
-    pEHClauseOut->m_handlerAddress = pEnumState->pMethodStartAddress + handlerStartOffset;
+    uint32_t filterStartOffset = 0;
 
     // For each clause, we have up to 4 integers:
     //      1)  try start offset
@@ -1093,42 +1087,57 @@ bool CoffNativeCodeManager::EHEnumNext(EHEnumState * pEHEnumState, EHClause * pE
     case EH_CLAUSE_FAULT:
         break;
     case EH_CLAUSE_FILTER:
-        {
-            uint32_t filterStartOffset = VarInt::ReadUnsigned(pEnumState->pEHInfo);
-
-            // If we have cold code, we might need to fix up the exception handler's offset
-            if (m_nHotColdMap > 0)
-            {
-                CalculateColdHandlerOffset(filterStartOffset);
-            }
-
-            pEHClauseOut->m_filterAddress = pEnumState->pMethodStartAddress + filterStartOffset;
-        }
+        filterStartOffset = VarInt::ReadUnsigned(pEnumState->pEHInfo);
         break;
     default:
         UNREACHABLE_MSG("unexpected EHClauseKind");
     }
 
-    return true;
-}
-
-void CoffNativeCodeManager::CalculateColdHandlerOffset(uint32_t & handlerStartOffset)
-{
-    ASSERT(m_pCurrentMethodWithEH != NULL);
-    DWORD hotBeginAddress = m_pCurrentMethodWithEH->mainRuntimeFunction->BeginAddress;
-    uint32_t hotCodeSize = (uint32_t)CalculateHotCodeSize(m_pCurrentMethodWithEH);
-
-    // If handler is in cold section, we need to recalculate its start offset
-    if (handlerStartOffset >= hotCodeSize)
+    // With hot/cold splitting, handlers/filters can be cold, so we may need to fix their offsets
+    if (m_nHotColdMap > 0)
     {
-        uint32_t handlerOffsetFromColdBegin = handlerStartOffset - hotCodeSize;
-
+        uint32_t hotCodeSize = (uint32_t)CalculateHotCodeSize(m_pCurrentMethodWithEH);
+        DWORD hotBeginAddress = m_pCurrentMethodWithEH->mainRuntimeFunction->BeginAddress;
         DWORD coldBeginAddress = LookupHotColdMapping((uint32_t)hotBeginAddress, m_pHotColdMap, m_nHotColdMap);
         ASSERT(coldBeginAddress >= m_pHotColdMap[0]);
+        DWORD coldCodeOffset = coldBeginAddress - hotBeginAddress;
 
-        // Handler offset = hot code length + gap between hot/cold sections + offset from start of cold code
-        handlerStartOffset = (coldBeginAddress - hotBeginAddress) + handlerOffsetFromColdBegin;
+        if (handlerStartOffset >= hotCodeSize)
+        {
+            // New offset = hot code length + gap between hot/cold sections + offset from start of cold code
+            uint32_t handlerOffsetFromColdBegin = handlerStartOffset - hotCodeSize;
+            handlerStartOffset = coldCodeOffset + handlerOffsetFromColdBegin;
+        }
+
+        if (filterStartOffset >= hotCodeSize)
+        {
+            uint32_t filterOffsetFromColdBegin = filterStartOffset - hotCodeSize;
+            filterStartOffset = coldCodeOffset + filterOffsetFromColdBegin;
+        }
+
+        // Try offsets can be cold, too. In ExceptionHandling.cs, we want to make sure ContainsCodeOffset()
+        // compares the PC's offset from hotBeginAddress to try start/end offsets that factor in the cold
+        // section offset.
+        if (pEHClauseOut->m_tryStartOffset >= hotCodeSize)
+        {
+            uint32_t tryStartOffsetFromColdBegin = pEHClauseOut->m_tryStartOffset - hotCodeSize;
+            pEHClauseOut->m_tryStartOffset = coldCodeOffset + tryStartOffsetFromColdBegin;
+
+            ASSERT(pEHClauseOut->m_tryEndOffset >= hotCodeSize);
+            uint32_t tryEndOffsetFromColdBegin = pEHClauseOut->m_tryEndOffset - hotCodeSize;
+            pEHClauseOut->m_tryEndOffset = coldCodeOffset + tryEndOffsetFromColdBegin;
+        }
+        else if (pEHClauseOut->m_tryEndOffset >= hotCodeSize)
+        {
+            uint32_t tryEndOffsetFromColdBegin = pEHClauseOut->m_tryEndOffset - hotCodeSize;
+            pEHClauseOut->m_tryEndOffset = coldCodeOffset + tryEndOffsetFromColdBegin;
+        }
     }
+
+    pEHClauseOut->m_handlerAddress = pEnumState->pMethodStartAddress + handlerStartOffset;
+    pEHClauseOut->m_filterAddress = pEnumState->pMethodStartAddress + filterStartOffset;
+
+    return true;
 }
 
 DWORD CoffNativeCodeManager::CalculateHotCodeSize(CoffNativeMethodInfo * pNativeMethodInfo)
