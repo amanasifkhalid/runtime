@@ -337,31 +337,11 @@ bool CoffNativeCodeManager::FindMethodInfo(PTR_VOID        ControlPC,
         int hotMethodIndex = LookupUnwindInfoForMethod(
             (uint32_t)hotStartRva, m_pRuntimeFunctionTable, 0, m_nRuntimeFunctionTable - 1);
         ASSERT(hotMethodIndex >= 0);
-        PTR_RUNTIME_FUNCTION pHotRuntimeFunction = m_pRuntimeFunctionTable + hotMethodIndex;
-
-#if defined(_DEBUG) && defined(TARGET_AMD64)
-        size_t u;
-        PTR_UNWIND_INFO p = (PTR_UNWIND_INFO)GetUnwindDataBlob(m_moduleBase, pRuntimeFunction, &u);
-
-        if (p->Flags & UNW_FLAG_CHAININFO)
-        {
-            ASSERT(pHotRuntimeFunction->BeginAddress == ((PTR_RUNTIME_FUNCTION)&(p->UnwindCode))->BeginAddress);
-        }
-#endif
-
-        pRuntimeFunction = pHotRuntimeFunction;
+        pRuntimeFunction = m_pRuntimeFunctionTable + hotMethodIndex;
     }
 
     pMethodInfo->mainRuntimeFunction = pRuntimeFunction;
     pMethodInfo->executionAborted = false;
-
-#ifdef _DEBUG
-    size_t unwindDataBlobSize;
-    PTR_VOID pUnwindDataBlob = GetUnwindDataBlob(m_moduleBase, pRuntimeFunction, &unwindDataBlobSize);
-    uint8_t unwindBlockFlags = *(dac_cast<DPTR(uint8_t)>(pUnwindDataBlob) + unwindDataBlobSize);
-    ASSERT((unwindBlockFlags & UBF_FUNC_KIND_MASK) == UBF_FUNC_KIND_ROOT);
-    ASSERT((m_nHotColdMap == 0) || (pRuntimeFunction->BeginAddress < m_pHotColdMap[0]));
-#endif
 
     return true;
 }
@@ -375,14 +355,6 @@ bool CoffNativeCodeManager::IsFunclet(MethodInfo * pMethInfo)
 
     uint8_t unwindBlockFlags = *(dac_cast<DPTR(uint8_t)>(pUnwindDataBlob) + unwindDataBlobSize);
 
-#if defined(_DEBUG) && defined(TARGET_AMD64)
-    // Chained unwind info should not be used for funclets
-    if (((PTR_UNWIND_INFO)pUnwindDataBlob)->Flags & UNW_FLAG_CHAININFO)
-    {
-        ASSERT((unwindBlockFlags & UBF_FUNC_KIND_MASK) == UBF_FUNC_KIND_ROOT);
-    }
-#endif
-
     return (unwindBlockFlags & UBF_FUNC_KIND_MASK) != UBF_FUNC_KIND_ROOT;
 }
 
@@ -394,14 +366,6 @@ bool CoffNativeCodeManager::IsFilter(MethodInfo * pMethInfo)
     PTR_VOID pUnwindDataBlob = GetUnwindDataBlob(m_moduleBase, pMethodInfo->runtimeFunction, &unwindDataBlobSize);
 
     uint8_t unwindBlockFlags = *(dac_cast<DPTR(uint8_t)>(pUnwindDataBlob) + unwindDataBlobSize);
-
-#if defined(_DEBUG) && defined(TARGET_AMD64)
-    // Chained unwind info should not be used for funclets
-    if (((PTR_UNWIND_INFO)pUnwindDataBlob)->Flags & UNW_FLAG_CHAININFO)
-    {
-        ASSERT((unwindBlockFlags & UBF_FUNC_KIND_MASK) == UBF_FUNC_KIND_ROOT);
-    }
-#endif
 
     return (unwindBlockFlags & UBF_FUNC_KIND_MASK) == UBF_FUNC_KIND_FILTER;
 }
@@ -487,7 +451,6 @@ uint32_t CoffNativeCodeManager::GetCodeOffset(MethodInfo* pMethodInfo, PTR_VOID 
         TADDR offsetFromColdBegin = relativeAddress - coldBeginAddress;
         DWORD hotCodeSize = CalculateHotCodeSize(pNativeMethodInfo);
 
-        // New offset = hot code length + gap between hot/cold sections + offset from start of cold code
         return (uint32_t)(hotCodeSize + offsetFromColdBegin);
     }
 
@@ -884,7 +847,6 @@ bool CoffNativeCodeManager::GetReturnAddressHijackInfo(MethodInfo *    pMethodIn
 
     if ((unwindBlockFlags & UBF_FUNC_HAS_ASSOCIATED_DATA) != 0)
         p += sizeof(int32_t);
-
 
     // Skip hijacking a reverse-pinvoke method - it doesn't get us much because we already synchronize
     // with the GC on the way back to native code.

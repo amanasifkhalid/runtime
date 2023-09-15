@@ -9,6 +9,7 @@ using ILCompiler.DependencyAnalysisFramework;
 
 using Internal.IL;
 using Internal.JitInterface;
+using Internal.TypeSystem;
 
 namespace ILCompiler
 {
@@ -123,7 +124,8 @@ namespace ILCompiler
             if (_resilient)
                 options |= RyuJitCompilationOptions.UseResilience;
 
-            if (_hotColdSplitting)
+            bool supportsHotColdSplitting = _context.Target.IsWindows && (_context.Target.Architecture == TargetArchitecture.X64);
+            if (_hotColdSplitting && supportsHotColdSplitting)
             {
                 jitFlagBuilder.Add(CorJitFlag.CORJIT_FLAG_PROCSPLIT);
             }
