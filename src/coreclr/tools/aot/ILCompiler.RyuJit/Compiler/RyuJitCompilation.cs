@@ -28,6 +28,8 @@ namespace ILCompiler
         private readonly MethodImportationErrorProvider _methodImportationErrorProvider;
         private readonly int _parallelism;
 
+        private bool _generatedColdCode;
+
         public InstructionSetSupport InstructionSetSupport { get; }
 
         internal RyuJitCompilation(
@@ -137,8 +139,12 @@ namespace ILCompiler
             }
             else
             {
-                CompileSingleThreaded(methodsToCompile);
-                // CompileMultiThreaded(methodsToCompile);
+                CompileMultiThreaded(methodsToCompile);
+            }
+
+            if (_generatedColdCode)
+            {
+                _nodeFactory.GenerateHotColdMap(_dependencyGraph);
             }
         }
 
@@ -215,9 +221,10 @@ namespace ILCompiler
                     Logger.LogError($"Method will always throw because: {exception.Message}", 1005, method, MessageSubCategory.AotAnalysis);
             }
 
+            // We can only make _generatedColdCode true here, so concurrent writes should be safe
             if (methodCodeNodeNeedingCode.ColdCodeNode != null)
             {
-                _nodeFactory.GenerateHotColdMap(_dependencyGraph);
+                _generatedColdCode = true;
             }
         }
 
