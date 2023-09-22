@@ -72,6 +72,8 @@ namespace Internal.JitInterface
 
         private ExceptionDispatchInfo _lastException;
 
+        private bool _onlyColdFunclets = true;
+
         private struct PgoInstrumentationResults
         {
             public PgoInstrumentationSchema* pSchema;
@@ -485,6 +487,17 @@ namespace Internal.JitInterface
 
             if (_methodColdCodeNode != null)
             {
+                if (_onlyColdFunclets)
+                {
+                    // Skip function aligning for cold EH funclets to save space, since this path is slow anyway
+                    alignment = 1;
+                }
+                else
+                {
+                    // Use smaller padding for cold code without sacrificing too much performance
+                    alignment = _compilation.NodeFactory.Target.MinimumFunctionAlignment;
+                }
+
                 var relocs2 = _coldCodeRelocs.ToArray();
                 Array.Sort(relocs2, (x, y) => (x.Offset - y.Offset));
                 var coldObjectData = new ObjectNode.ObjectData(_coldCode,
@@ -663,6 +676,9 @@ namespace Internal.JitInterface
             _methodColdCodeNode = null;
             _code = null;
             _coldCode = null;
+
+            // Default to true; will be set to false if reserveUnwindInfo is called with isColdCode=true, isFunclet=false
+            _onlyColdFunclets = true;
 
             _roData = null;
             _roDataBlob = null;
@@ -3629,6 +3645,7 @@ namespace Internal.JitInterface
             if (isColdCode)
             {
                 _numColdFrameInfos++;
+                _onlyColdFunclets = _onlyColdFunclets && isFunclet;
             }
             else
             {
