@@ -9508,6 +9508,11 @@ void CEEInfo::extractSpecialSwiftCallParameters(CORINFO_SIG_INFO* sig,
     _ASSERTE(selfParamIndex != nullptr);
     _ASSERTE(errorParamIndex != nullptr);
     _ASSERTE(asyncContextIndex != nullptr);
+
+    // Indices should be initialized to negative (i.e. invalid) values
+    _ASSERTE(*selfParamIndex < 0);
+    _ASSERTE(*errorParamIndex < 0);
+    _ASSERTE(*asyncContextIndex < 0);
     
     SigPointer ptr((unsigned __int8*) sig->args);
     CorElementType eType;
@@ -9518,11 +9523,6 @@ void CEEInfo::extractSpecialSwiftCallParameters(CORINFO_SIG_INFO* sig,
         IfFailThrow(ptr.GetElemType(NULL));
         IfFailThrow(ptr.PeekElemType(&eType));
     }
-
-    // Indicate a special parameter was not found with an invalid index
-    *selfParamIndex = -1;
-    *errorParamIndex = -1;
-    *asyncContextIndex = -1;
 
     SigTypeContext typeContext;
     GetTypeContext(&sig->sigInst, &typeContext);
@@ -9544,12 +9544,13 @@ void CEEInfo::extractSpecialSwiftCallParameters(CORINFO_SIG_INFO* sig,
 
         if (result == CORINFO_CLASS_HANDLE(CoreLibBinder::GetClass(CLASS__SWIFTSELF)))
         {
-            _ASSERTE(*selfParamIndex == -1);
+            // The signature should not have more than one SwiftSelf/SwiftError/SwiftAsync parameter
+            _ASSERTE(*selfParamIndex < 0);
             *selfParamIndex = paramIndex;
         }
         else if (result == CORINFO_CLASS_HANDLE(CoreLibBinder::GetClass(CLASS__SWIFTERROR)))
         {
-            _ASSERTE(*errorParamIndex == -1);
+            _ASSERTE(*errorParamIndex < 0);
             *errorParamIndex = paramIndex;
         }
         // TODO: Handle CLASS__SWIFTASYNC

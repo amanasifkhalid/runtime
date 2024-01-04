@@ -98,6 +98,13 @@ var_types Compiler::impImportCall(OPCODE                  opcode,
     CORINFO_SIG_INFO calliSig;
     NewCallArg       extraArg;
 
+#if defined(TARGET_AMD64) || defined(TARGET_ARM64)
+    // For Swift calls, these indices will be used to find special parameters needed to support the calling convention
+    int selfIndex  = -1;
+    int errorIndex = -1;
+    int asyncIndex = -1;
+#endif // defined(TARGET_AMD64) || defined(TARGET_ARM64)
+
     /*-------------------------------------------------------------------------
      * First create the call node
      */
@@ -664,6 +671,15 @@ var_types Compiler::impImportCall(OPCODE                  opcode,
         checkForSmallType = true;
 
         impPopArgsForUnmanagedCall(call->AsCall(), sig);
+
+#if defined(TARGET_AMD64) || defined(TARGET_ARM64)
+        // We might be importing an unmanaged Swift call, which might require special parameter handling.
+        // The Swift method signature does not have enough information to determine the arg types,
+        // but the signature of the IL stub does have enough information (and matches the arg order), so use it.
+        CORINFO_SIG_INFO callerSig;
+        info.compCompHnd->getMethodSig(info.compMethodHnd, &callerSig, nullptr);
+        info.compCompHnd->extractSpecialSwiftCallParameters(&callerSig, &selfIndex, &errorIndex, &asyncIndex);
+#endif // defined(TARGET_AMD64) || defined(TARGET_ARM64)
 
         goto DONE;
     }
@@ -1447,33 +1463,27 @@ DONE_CALL:
 #if defined(TARGET_AMD64) || defined(TARGET_ARM64)
     static_assert_no_msg(SWIFT_ERROR_REG != REG_NA);
 
-    if ((call->gtFlags & GTF_CALL_UNMANAGED) != 0)
+    if (errorIndex >= 0)
     {
+        // This Swift method signature has error handling; get the corresponding arg node
+        assert(errorIndex < (int)sig->numArgs);
+        assert((call->gtFlags & GTF_CALL_UNMANAGED) != 0);
         assert(call->IsCall());
-        CORINFO_SIG_INFO callerSig;
-        info.compCompHnd->getMethodSig(info.compMethodHnd, &callerSig, nullptr);
+        CallArg* errorArg = call->AsCall()->gtArgs.GetArgByIndex(errorIndex);
 
-        int selfIndex;
-        int errorIndex;
-        int asyncIndex;
-        info.compCompHnd->extractSpecialSwiftCallParameters(&callerSig, &selfIndex, &errorIndex, &asyncIndex);
+        assert(errorArg != nullptr);
+        assert(errorArg->GetLateNode() == nullptr);
+        GenTree* argNode = errorArg->GetEarlyNode();
+        assert(argNode->OperIs(GT_LCL_VAR));
 
-        if (errorIndex >= 0)
-        {
-            // This Swift method signature has error handling; get the corresponding arg node
-            assert(errorIndex < (int)callerSig.numArgs);
-            CallArg* errorArg = call->AsCall()->gtArgs.GetArgByIndex(errorIndex);
-            assert(errorArg != nullptr);
-            assert(errorArg->GetLateNode() == nullptr);
-            GenTree* argNode = errorArg->GetEarlyNode();
-            assert(argNode->OperIs(GT_LCL_VAR));
-
-            GenTree* swiftErrorNode = new (this, GT_SWIFT_ERROR) GenTree(GT_SWIFT_ERROR, TYP_REF);
-            swiftErrorNode->SetRegNum(SWIFT_ERROR_REG);
-            swiftErrorNode->SetHasOrderingSideEffect();
-            GenTreeStoreInd* swiftErrorStore = gtNewStoreIndNode(TYP_REF, gtNewLclvNode(argNode->AsLclVar()->GetLclNum(), argNode->TypeGet()), swiftErrorNode);
-            impAppendTree(swiftErrorStore, CHECK_SPILL_ALL, impCurStmtDI, false);
-        }
+        // Store the error register value to where the SwiftError* points to
+        GenTree* swiftErrorNode = new (this, GT_SWIFT_ERROR) GenTree(GT_SWIFT_ERROR, TYP_REF);
+        swiftErrorNode->SetRegNum(SWIFT_ERROR_REG);
+        swiftErrorNode->SetHasOrderingSideEffect();
+        GenTreeStoreInd* swiftErrorStore =
+            gtNewStoreIndNode(TYP_REF, gtNewLclvNode(argNode->AsLclVar()->GetLclNum(), argNode->TypeGet()),
+                              swiftErrorNode);
+        impAppendTree(swiftErrorStore, CHECK_SPILL_ALL, impCurStmtDI, false);
     }
 #endif // defined(TARGET_AMD64) || defined(TARGET_ARM64)
 
