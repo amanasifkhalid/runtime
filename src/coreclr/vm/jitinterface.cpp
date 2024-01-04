@@ -9491,6 +9491,75 @@ CorInfoTypeWithMod CEEInfo::getArgType (
     return result;
 }
 
+void CEEInfo::extractSpecialSwiftCallParameters(CORINFO_SIG_INFO* sig,
+                                                int* selfParamIndex,
+                                                int* errorParamIndex,
+                                                int* asyncContextIndex)
+{
+    CONTRACTL {
+        THROWS;
+        GC_TRIGGERS;
+        MODE_PREEMPTIVE;
+    } CONTRACTL_END;
+
+    JIT_TO_EE_TRANSITION();
+
+    _ASSERTE(sig != nullptr);
+    _ASSERTE(selfParamIndex != nullptr);
+    _ASSERTE(errorParamIndex != nullptr);
+    _ASSERTE(asyncContextIndex != nullptr);
+    
+    SigPointer ptr((unsigned __int8*) sig->args);
+    CorElementType eType;
+    IfFailThrow(ptr.PeekElemType(&eType));
+
+    while (eType == ELEMENT_TYPE_PINNED)
+    {
+        IfFailThrow(ptr.GetElemType(NULL));
+        IfFailThrow(ptr.PeekElemType(&eType));
+    }
+
+    // Indicate a special parameter was not found with an invalid index
+    *selfParamIndex = -1;
+    *errorParamIndex = -1;
+    *asyncContextIndex = -1;
+
+    SigTypeContext typeContext;
+    GetTypeContext(&sig->sigInst, &typeContext);
+    Module* pModule = GetModule(sig->scope);
+
+    for (unsigned short paramIndex = 0; paramIndex < sig->numArgs; paramIndex++)
+    {
+        CorElementType type = ptr.PeekElemTypeClosed(pModule, &typeContext);
+        TypeHandle th = ptr.GetTypeHandleThrowing(pModule, &typeContext);
+
+        // Swift methods with error handling/async behavior take pointers to the respective special types,
+        // so get the type the pointer is pointing to, if applicable
+        if (th.HasTypeParam())
+        {
+            th = th.GetTypeParam();
+        }
+
+        CORINFO_CLASS_HANDLE result = CORINFO_CLASS_HANDLE(th.AsPtr());
+
+        if (result == CORINFO_CLASS_HANDLE(CoreLibBinder::GetClass(CLASS__SWIFTSELF)))
+        {
+            _ASSERTE(*selfParamIndex == -1);
+            *selfParamIndex = paramIndex;
+        }
+        else if (result == CORINFO_CLASS_HANDLE(CoreLibBinder::GetClass(CLASS__SWIFTERROR)))
+        {
+            _ASSERTE(*errorParamIndex == -1);
+            *errorParamIndex = paramIndex;
+        }
+        // TODO: Handle CLASS__SWIFTASYNC
+
+        IfFailThrow(ptr.SkipExactlyOne());
+    }
+
+    EE_TO_JIT_TRANSITION();
+}
+
 // Now the implementation is only focused on the float fields info,
 // while a struct-arg has no more than two fields and total size is no larger than two-pointer-size.
 // These depends on the platform's ABI rules.

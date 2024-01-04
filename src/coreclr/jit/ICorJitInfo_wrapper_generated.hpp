@@ -1058,6 +1058,17 @@ CorInfoTypeWithMod WrapICorJitInfo::getArgType(
     return temp;
 }
 
+void WrapICorJitInfo::extractSpecialSwiftCallParameters(
+          CORINFO_SIG_INFO* sig,
+          int* selfParamIndex,
+          int* errorParamIndex,
+          int* asyncContextIndex)
+{
+    API_ENTER(extractSpecialSwiftCallParameters);
+    wrapHnd->extractSpecialSwiftCallParameters(sig, selfParamIndex, errorParamIndex, asyncContextIndex);
+    API_LEAVE(extractSpecialSwiftCallParameters);
+}
+
 int WrapICorJitInfo::getExactClasses(
           CORINFO_CLASS_HANDLE baseType,
           int maxExactClasses,

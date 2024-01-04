@@ -69,7 +69,7 @@ class ComCallWrapperTemplate;
 //
 // Wherever possible, you should be using TypeHandles or MethodTables.
 // Code that is known to work over Class/ValueClass types (including their
-// instantaitions) is currently written to use MethodTables.
+// instantiations) is currently written to use MethodTables.
 //
 // TypeDescs in turn break down into several variants and are
 // for special cases around the edges

@@ -450,6 +450,12 @@ CorInfoTypeWithMod getArgType(
           CORINFO_ARG_LIST_HANDLE args,
           CORINFO_CLASS_HANDLE* vcTypeRet) override;
 
+void extractSpecialSwiftCallParameters(
+          CORINFO_SIG_INFO* sig,
+          int* selfParamIndex,
+          int* errorParamIndex,
+          int* asyncContextIndex) override;
+
 int getExactClasses(
           CORINFO_CLASS_HANDLE baseType,
           int maxExactClasses,

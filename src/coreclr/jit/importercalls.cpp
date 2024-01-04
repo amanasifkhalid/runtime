@@ -1425,6 +1425,16 @@ DONE_CALL:
             }
         }
 
+        // if ((call->gtFlags & GTF_CALL_UNMANAGED) != 0)
+        // {
+        //     CORINFO_SIG_INFO callerSig;
+        //     info.compCompHnd->getMethodSig(info.compMethodHnd, &callerSig, nullptr);
+
+        //     int res;
+        //     info.compCompHnd->extractSpecialSwiftCallParameters(&callerSig, &res, &res, &res);
+        //     assert(res == -1);
+        // }
+
         if (!bIntrinsicImported)
         {
             //-------------------------------------------------------------------------

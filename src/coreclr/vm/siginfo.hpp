@@ -203,8 +203,8 @@ private:
 public:
 
         //------------------------------------------------------------------------
-        // Assuming that the SigPointer points the start if an element type.
-        // Use SigTypeContext to fill in any  type parameters
+        // Assuming that the SigPointer points to the start of an element type.
+        // Use SigTypeContext to fill in any type parameters
         //
         // Also advance the pointer to after the element type.
         //------------------------------------------------------------------------

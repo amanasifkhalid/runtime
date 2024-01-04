@@ -5930,11 +5930,6 @@ void CodeGen::genCall(GenTreeCall* call)
         instGen(INS_vzeroupper);
     }
 
-    if (call->unmgdCallConv == CorInfoCallConvExtension::Swift)
-    {
-        //GetEmitter()->emitIns_R_R(INS_xor, EA_4BYTE, SWIFT_ERROR_REG, SWIFT_ERROR_REG);
-    }
-
     genCallInstruction(call X86_ARG(stackArgBytes));
 
     genDefinePendingCallLabel(call);

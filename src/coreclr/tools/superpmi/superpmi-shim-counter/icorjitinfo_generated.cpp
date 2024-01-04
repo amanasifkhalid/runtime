@@ -869,6 +869,16 @@ CorInfoTypeWithMod interceptor_ICJI::getArgType(
     return original_ICorJitInfo->getArgType(sig, args, vcTypeRet);
 }
 
+void interceptor_ICJI::extractSpecialSwiftCallParameters(
+          CORINFO_SIG_INFO* sig,
+          int* selfParamIndex,
+          int* errorParamIndex,
+          int* asyncContextIndex)
+{
+    mcs->AddCall("extractSpecialSwiftCallParameters");
+    original_ICorJitInfo->extractSpecialSwiftCallParameters(sig, selfParamIndex, errorParamIndex, asyncContextIndex);
+}
+
 int interceptor_ICJI::getExactClasses(
           CORINFO_CLASS_HANDLE baseType,
           int maxExactClasses,

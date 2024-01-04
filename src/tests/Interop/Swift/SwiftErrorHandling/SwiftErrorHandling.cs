@@ -16,18 +16,12 @@ public class ErrorHandlingTests
     [DllImport(SwiftLib, EntryPoint = "$s18SwiftErrorHandling018conditionallyThrowB004willE0SiSb_tKF")]
     public unsafe static extern nint conditionallyThrowError(bool willThrow, SwiftError* error);
 
-    public unsafe static void Test(SwiftError* err)
-    {
-        Console.WriteLine($"Before: {err->Value}");
-    }
-
     [Fact]
     public unsafe static void TestSwiftErrorThrown()
     {
         SwiftError error;
 
         // This will throw an error
-	Test(&error);
         conditionallyThrowError(true, &error);
 	Console.WriteLine($"After: {error.Value}");
         Assert.True(error.Value != IntPtr.Zero, "A Swift error was expected to be thrown.");
@@ -39,7 +33,6 @@ public class ErrorHandlingTests
         SwiftError error;
 
         // This will not throw an error
-	Test(&error);
         int result = (int)conditionallyThrowError(false, &error);
 	Console.WriteLine($"After: {error.Value}");
 

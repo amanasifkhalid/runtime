@@ -118,6 +118,7 @@ struct JitInterfaceCallbacks
     void (* freeArray)(void * thisHandle, CorInfoExceptionClass** ppException, void* array);
     CORINFO_ARG_LIST_HANDLE (* getArgNext)(void * thisHandle, CorInfoExceptionClass** ppException, CORINFO_ARG_LIST_HANDLE args);
     CorInfoTypeWithMod (* getArgType)(void * thisHandle, CorInfoExceptionClass** ppException, CORINFO_SIG_INFO* sig, CORINFO_ARG_LIST_HANDLE args, CORINFO_CLASS_HANDLE* vcTypeRet);
+    void (* extractSpecialSwiftCallParameters)(void * thisHandle, CorInfoExceptionClass** ppException, CORINFO_SIG_INFO* sig, int* selfParamIndex, int* errorParamIndex, int* asyncContextIndex);
     int (* getExactClasses)(void * thisHandle, CorInfoExceptionClass** ppException, CORINFO_CLASS_HANDLE baseType, int maxExactClasses, CORINFO_CLASS_HANDLE* exactClsRet);
     CORINFO_CLASS_HANDLE (* getArgClass)(void * thisHandle, CorInfoExceptionClass** ppException, CORINFO_SIG_INFO* sig, CORINFO_ARG_LIST_HANDLE args);
     CorInfoHFAElemType (* getHFAType)(void * thisHandle, CorInfoExceptionClass** ppException, CORINFO_CLASS_HANDLE hClass);
@@ -1241,6 +1242,17 @@ public:
     CorInfoTypeWithMod temp = _callbacks->getArgType(_thisHandle, &pException, sig, args, vcTypeRet);
     if (pException != nullptr) throw pException;
     return temp;
+}
+
+    virtual void extractSpecialSwiftCallParameters(
+          CORINFO_SIG_INFO* sig,
+          int* selfParamIndex,
+          int* errorParamIndex,
+          int* asyncContextIndex)
+{
+    CorInfoExceptionClass* pException = nullptr;
+    _callbacks->extractSpecialSwiftCallParameters(_thisHandle, &pException, sig, selfParamIndex, errorParamIndex, asyncContextIndex);
+    if (pException != nullptr) throw pException;
 }
 
     virtual int getExactClasses(

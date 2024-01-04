@@ -2953,6 +2953,13 @@ public:
             CORINFO_CLASS_HANDLE*       vcTypeRet       /* OUT */
             ) = 0;
 
+    virtual void extractSpecialSwiftCallParameters (
+            CORINFO_SIG_INFO*         sig,              /* IN */
+            int*                      selfParamIndex,   /* OUT */
+            int*                      errorParamIndex,  /* OUT */
+            int*                      asyncContextIndex /* OUT*/
+            ) = 0;
+
     // Obtains a list of exact classes for a given base type. Returns 0 if the number of
     // the exact classes is greater than maxExactClasses or if more types might be loaded
     // in future.

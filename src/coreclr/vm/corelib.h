@@ -1196,6 +1196,10 @@ DEFINE_CLASS(STACKFRAMEITERATOR, Runtime, StackFrameIterator)
 DEFINE_CLASS(EXINFO, Runtime, EH+ExInfo)
 #endif // FOR_ILLINK
 
+DEFINE_CLASS(SWIFTSELF, Swift, SwiftSelf)
+DEFINE_CLASS(SWIFTERROR, Swift, SwiftError)
+//TODO: DEFINE_CLASS(SWIFTASYNC, Swift, SwiftAsync)
+
 DEFINE_CLASS_U(System, GCMemoryInfoData, GCMemoryInfoData)
 DEFINE_FIELD_U(_highMemoryLoadThresholdBytes, GCMemoryInfoData, highMemLoadThresholdBytes)
 DEFINE_FIELD_U(_totalAvailableMemoryBytes, GCMemoryInfoData, totalAvailableMemoryBytes)
