@@ -7157,6 +7157,7 @@ bool GenTree::OperSupportsOrderingSideEffect() const
         case GT_CMPXCHG:
         case GT_MEMORYBARRIER:
         case GT_CATCH_ARG:
+        case GT_SWIFT_ERROR:
             return true;
         default:
             return false;
@@ -8442,7 +8443,7 @@ GenTree* Compiler::gtNewLoadValueNode(var_types type, ClassLayout* layout, GenTr
 //
 // Arguments:
 //    layout     - The struct layout
-//    addr       - Destionation address
+//    addr       - Destination address
 //    data       - Value to store
 //    indirFlags - Indirection flags
 //
@@ -8467,7 +8468,7 @@ GenTreeBlk* Compiler::gtNewStoreBlkNode(ClassLayout* layout, GenTree* addr, GenT
 //
 // Arguments:
 //    type       - Type of the store
-//    addr       - Destionation address
+//    addr       - Destination address
 //    data       - Value to store
 //    indirFlags - Indirection flags
 //
@@ -10102,6 +10103,7 @@ GenTreeUseEdgeIterator::GenTreeUseEdgeIterator(GenTree* node)
         case GT_PINVOKE_EPILOG:
         case GT_IL_OFFSET:
         case GT_NOP:
+        case GT_SWIFT_ERROR:
             m_state = -1;
             return;
 
@@ -12188,6 +12190,7 @@ void Compiler::gtDispLeaf(GenTree* tree, IndentStack* indentStack)
         case GT_MEMORYBARRIER:
         case GT_PINVOKE_PROLOG:
         case GT_JMPTABLE:
+        case GT_SWIFT_ERROR:
             break;
 
         case GT_RET_EXPR:

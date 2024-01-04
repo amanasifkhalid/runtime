@@ -2074,6 +2074,7 @@ void CodeGen::genCodeForTreeNode(GenTree* treeNode)
             // into the register specified in this node.
             break;
 
+        case GT_SWIFT_ERROR:
         case GT_NOP:
             break;
 

@@ -1425,16 +1425,6 @@ DONE_CALL:
             }
         }
 
-        // if ((call->gtFlags & GTF_CALL_UNMANAGED) != 0)
-        // {
-        //     CORINFO_SIG_INFO callerSig;
-        //     info.compCompHnd->getMethodSig(info.compMethodHnd, &callerSig, nullptr);
-
-        //     int res;
-        //     info.compCompHnd->extractSpecialSwiftCallParameters(&callerSig, &res, &res, &res);
-        //     assert(res == -1);
-        // }
-
         if (!bIntrinsicImported)
         {
             //-------------------------------------------------------------------------
@@ -1453,6 +1443,39 @@ DONE_CALL:
 
         impPushOnStack(call, tiRetVal);
     }
+
+#if defined(TARGET_AMD64) || defined(TARGET_ARM64)
+    static_assert_no_msg(SWIFT_ERROR_REG != REG_NA);
+
+    if ((call->gtFlags & GTF_CALL_UNMANAGED) != 0)
+    {
+        assert(call->IsCall());
+        CORINFO_SIG_INFO callerSig;
+        info.compCompHnd->getMethodSig(info.compMethodHnd, &callerSig, nullptr);
+
+        int selfIndex;
+        int errorIndex;
+        int asyncIndex;
+        info.compCompHnd->extractSpecialSwiftCallParameters(&callerSig, &selfIndex, &errorIndex, &asyncIndex);
+
+        if (errorIndex >= 0)
+        {
+            // This Swift method signature has error handling; get the corresponding arg node
+            assert(errorIndex < (int)callerSig.numArgs);
+            CallArg* errorArg = call->AsCall()->gtArgs.GetArgByIndex(errorIndex);
+            assert(errorArg != nullptr);
+            assert(errorArg->GetLateNode() == nullptr);
+            GenTree* argNode = errorArg->GetEarlyNode();
+            assert(argNode->OperIs(GT_LCL_VAR));
+
+            GenTree* swiftErrorNode = new (this, GT_SWIFT_ERROR) GenTree(GT_SWIFT_ERROR, TYP_REF);
+            swiftErrorNode->SetRegNum(SWIFT_ERROR_REG);
+            swiftErrorNode->SetHasOrderingSideEffect();
+            GenTreeStoreInd* swiftErrorStore = gtNewStoreIndNode(TYP_REF, gtNewLclvNode(argNode->AsLclVar()->GetLclNum(), argNode->TypeGet()), swiftErrorNode);
+            impAppendTree(swiftErrorStore, CHECK_SPILL_ALL, impCurStmtDI, false);
+        }
+    }
+#endif // defined(TARGET_AMD64) || defined(TARGET_ARM64)
 
     // VSD functions get a new call target each time we getCallInfo, so clear the cache.
     // Also, the call info cache for CALLI instructions is largely incomplete, so clear it out.

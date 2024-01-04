@@ -120,6 +120,8 @@ REGDEF(XMM29,  29+XMMBASE,  XMMMASK(29),  "mm29" )
 REGDEF(XMM30,  30+XMMBASE,  XMMMASK(30),  "mm30" )
 REGDEF(XMM31,  31+XMMBASE,  XMMMASK(31),  "mm31" )
 
+#define SWIFT_ERROR_REG REG_R12
+
 #endif // !TARGET_AMD64
 
 REGDEF(K0,     0+KBASE,    KMASK(0),     "k0"   )
@@ -148,6 +150,11 @@ REGDEF(STK,    8+KBASE,    0x0000,       "STK"  )
 #else
   #error Unsupported or unset target architecture
 #endif // target type
+
+#ifndef SWIFT_ERROR_REG
+  #define SWIFT_ERROR_REG REG_NA
+#endif // SWIFT_ERROR_REG
+
 /*****************************************************************************/
 #undef  REGDEF
 #undef  REGALIAS

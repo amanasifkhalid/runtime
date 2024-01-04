@@ -439,6 +439,9 @@ void CodeGen::genCodeForTreeNode(GenTree* treeNode)
         case GT_CMPXCHG:
             genCodeForCmpXchg(treeNode->AsCmpXchg());
             break;
+
+        case GT_SWIFT_ERROR:
+            break;
 #endif // TARGET_ARM64
 
         case GT_RELOAD:
