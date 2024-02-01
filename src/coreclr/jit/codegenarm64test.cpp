@@ -5722,6 +5722,12 @@ void CodeGen::genArm64EmitterUnitTestsSve()
     theEmitter->emitIns_R_I(INS_sve_mov, EA_SCALABLE, REG_V7, 127, INS_OPTS_SCALABLE_D,
                             INS_SCALABLE_OPTS_SHIFT); // MOV <Zd>.<T>, #<imm>{, <shift>}
 
+    // IF_SVE_EB_1B
+    theEmitter->emitIns_R(INS_sve_fmov, EA_SCALABLE, REG_V0, INS_OPTS_SCALABLE_B); // FMOV <Zd>.<T>, #0.0
+    theEmitter->emitIns_R(INS_sve_fmov, EA_SCALABLE, REG_V1, INS_OPTS_SCALABLE_H); // FMOV <Zd>.<T>, #0.0
+    theEmitter->emitIns_R(INS_sve_fmov, EA_SCALABLE, REG_V2, INS_OPTS_SCALABLE_S); // FMOV <Zd>.<T>, #0.0
+    theEmitter->emitIns_R(INS_sve_fmov, EA_SCALABLE, REG_V3, INS_OPTS_SCALABLE_D); // FMOV <Zd>.<T>, #0.0
+
     // IF_SVE_EC_1A
     theEmitter->emitIns_R_I(INS_sve_add, EA_SCALABLE, REG_V0, 0,
                             INS_OPTS_SCALABLE_B); // ADD <Zdn>.<T>, <Zdn>.<T>, #<imm>{, <shift>}
