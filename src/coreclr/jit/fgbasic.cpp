@@ -454,13 +454,10 @@ void Compiler::fgChangeEhfBlock(BasicBlock* oldBlock, BasicBlock* newBlock)
         assert(succ != nullptr);
 
         // Remove the old edge [oldBlock => succ]
-        //
-        assert(succ->countOfInEdges() > 0);
-        fgRemoveRefPred(succ, oldBlock);
-
         // Create the new edge [newBlock => succ]
         //
-        fgAddRefPred(succ, newBlock);
+        assert(succ->countOfInEdges() > 0);
+        fgAddRefPred(succ, newBlock, fgRemoveRefPred(succ, oldBlock));
     }
 }
 
@@ -522,12 +519,9 @@ void Compiler::fgReplaceEhfSuccessor(BasicBlock* block, BasicBlock* oldSucc, Bas
         succTab[oldSuccNum] = newSucc;
 
         // Remove the old edge [block => oldSucc]
-        //
-        fgRemoveAllRefPreds(oldSucc, block);
-
         // Create the new edge [block => newSucc]
         //
-        fgAddRefPred(newSucc, block);
+        fgAddRefPred(newSucc, block, fgRemoveAllRefPreds(oldSucc, block));
 
         JITDUMP("Replace BBJ_EHFINALLYRET " FMT_BB " successor " FMT_BB " with " FMT_BB "\n", block->bbNum,
                 oldSucc->bbNum, newSucc->bbNum);

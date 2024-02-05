@@ -4693,11 +4693,6 @@ void Compiler::compCompile(void** methodCodePtr, uint32_t* methodCodeSize, JitFl
         //
         DoPhase(this, PHASE_MERGE_THROWS, &Compiler::fgTailMergeThrows);
 
-        // Disable profile checks now.
-        // Over time we will move this further and further back in the phase list, as we fix issues.
-        //
-        activePhaseChecks &= ~PhaseChecks::CHECK_PROFILE;
-
         // Run an early flow graph simplification pass
         //
         DoPhase(this, PHASE_EARLY_UPDATE_FLOW_GRAPH, &Compiler::fgUpdateFlowGraphPhase);

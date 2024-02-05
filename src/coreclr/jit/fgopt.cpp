@@ -1877,7 +1877,20 @@ bool Compiler::fgOptimizeSwitchBranches(BasicBlock* block)
             // Maintain, if necessary, the set of unique targets of "block."
             UpdateSwitchTableTarget(block, bDest, bNewDest);
 
-            fgAddRefPred(bNewDest, block, fgRemoveRefPred(bDest, block));
+            // Remove the old edge [oldSwitchBlock => bJump]
+            //
+            FlowEdge* const oldEdge = fgRemoveRefPred(bDest, block);
+
+            // Create the new edge [newSwitchBlock => bJump]
+            //
+            FlowEdge* const newEdge = fgAddRefPred(bNewDest, block, oldEdge);
+
+            // Handle the profile update, once we get our hands on the old edge.
+            //
+            if ((oldEdge != nullptr) && !newEdge->hasLikelihood())
+            {
+                newEdge->setLikelihood(oldEdge->getLikelihood());
+            }
 
             // we optimized a Switch label - goto REPEAT_SWITCH to follow this new jump
             returnvalue = true;
@@ -2476,14 +2489,22 @@ bool Compiler::fgOptimizeUncondBranchToSimpleCond(BasicBlock* block, BasicBlock*
     // Fix up block's flow
     //
     block->SetCond(target->GetTrueTarget(), next);
-    fgAddRefPred(block->GetTrueTarget(), block);
-    fgRemoveRefPred(target, block);
+    FlowEdge* const oldEdge = fgRemoveRefPred(target, block);
+    fgAddRefPred(block->GetTrueTarget(), block, oldEdge);
 
     // The new block 'next' will inherit its weight from 'block'
     //
     next->inheritWeight(block);
-    fgAddRefPred(next, block);
-    fgAddRefPred(next->GetTarget(), next);
+
+    {
+        FlowEdge* const newEdge = fgAddRefPred(next, block);
+        newEdge->setLikelihood(1.0 - oldEdge->getLikelihood());
+    }
+
+    {
+        FlowEdge* const newEdge = fgAddRefPred(next->GetTarget(), next);
+        newEdge->setLikelihood(1.0);
+    }
 
     JITDUMP("fgOptimizeUncondBranchToSimpleCond(from " FMT_BB " to cond " FMT_BB "), created new uncond " FMT_BB "\n",
             block->bbNum, target->bbNum, next->bbNum);
@@ -2887,16 +2908,15 @@ bool Compiler::fgOptimizeBranch(BasicBlock* bJump)
     /* Update bbRefs and bbPreds */
 
     // bJump now falls through into the next block
-    //
-    fgAddRefPred(bJump->GetFalseTarget(), bJump);
-
     // bJump no longer jumps to bDest
     //
-    fgRemoveRefPred(bDest, bJump);
+    FlowEdge* const oldEdge = fgRemoveRefPred(bDest, bJump);
+    fgAddRefPred(bJump->GetFalseTarget(), bJump, oldEdge);
 
     // bJump now jumps to bDest's normal jump target
     //
-    fgAddRefPred(bDestNormalTarget, bJump);
+    FlowEdge* const newEdge = fgAddRefPred(bDestNormalTarget, bJump);
+    newEdge->setLikelihood(1.0 - newEdge->getLikelihood());
 
     if (weightJump > 0)
     {
@@ -3058,6 +3078,9 @@ bool Compiler::fgOptimizeSwitchJumps()
 
         blockToTargetEdge->setEdgeWeights(blockToTargetWeight, blockToTargetWeight, dominantTarget);
         blockToNewBlockEdge->setEdgeWeights(blockToNewBlockWeight, blockToNewBlockWeight, block);
+
+        blockToTargetEdge->setLikelihood(fraction);
+        blockToNewBlockEdge->setLikelihood(1.0 - fraction);
 
         // There may be other switch cases that lead to this same block, but there's just
         // one edge in the flowgraph. So we need to subtract off the profile data that now flows
@@ -4986,9 +5009,10 @@ bool Compiler::fgUpdateFlowGraph(bool doTailDuplication /* = false */, bool isPh
                                 bDest->SetFalseTarget(bFixup);
                                 bFixup->inheritWeight(bDestFalseTarget);
 
-                                fgRemoveRefPred(bDestFalseTarget, bDest);
-                                fgAddRefPred(bFixup, bDest);
-                                fgAddRefPred(bDestFalseTarget, bFixup);
+                                FlowEdge* const oldEdge = fgRemoveRefPred(bDestFalseTarget, bDest);
+                                fgAddRefPred(bFixup, bDest, oldEdge);
+                                FlowEdge* const newEdge = fgAddRefPred(bDestFalseTarget, bFixup);
+                                newEdge->setLikelihood(1.0);
                             }
                         }
                     }
