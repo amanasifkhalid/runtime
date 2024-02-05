@@ -5670,7 +5670,9 @@ PhaseStatus Compiler::fgHeadTailMerge(bool early)
                 {
                     fgRemoveRefPred(commSucc, predBlock);
                 }
-                fgAddRefPred(crossJumpTarget, predBlock);
+
+                FlowEdge* const newEdge = fgAddRefPred(crossJumpTarget, predBlock);
+                newEdge->setLikelihood(1.0);
             }
 
             // We changed things
