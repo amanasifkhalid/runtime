@@ -1883,11 +1883,11 @@ bool Compiler::fgOptimizeSwitchBranches(BasicBlock* block)
 
             // Create the new edge [newSwitchBlock => bJump]
             //
-            FlowEdge* const newEdge = fgAddRefPred(bNewDest, block, oldEdge);
+            FlowEdge* const newEdge = fgAddRefPred(bNewDest, block);
 
             // Handle the profile update, once we get our hands on the old edge.
             //
-            if ((oldEdge != nullptr) && !newEdge->hasLikelihood())
+            if ((oldEdge != nullptr) && oldEdge->hasLikelihood())
             {
                 newEdge->setLikelihood(oldEdge->getLikelihood());
             }
@@ -2490,16 +2490,24 @@ bool Compiler::fgOptimizeUncondBranchToSimpleCond(BasicBlock* block, BasicBlock*
     //
     block->SetCond(target->GetTrueTarget(), next);
     FlowEdge* const oldEdge = fgRemoveRefPred(target, block);
-    fgAddRefPred(block->GetTrueTarget(), block, oldEdge);
+
+    // target should have been block's only successor, so fgRemoveRefPred should return a valid edge
+    //
+    assert(oldEdge != nullptr);
+
+    FlowEdge* const trueEdge  = fgAddRefPred(block->GetTrueTarget(), block);
+    FlowEdge* const falseEdge = fgAddRefPred(block->GetFalseTarget(), block);
+
+    // TODO-Flow: Remove branch once oldEdge is expected to have a likelihood
+    if (oldEdge->hasLikelihood())
+    {
+        trueEdge->setLikelihood(oldEdge->getLikelihood());
+        falseEdge->setLikelihood(1.0 - oldEdge->getLikelihood());
+    }
 
     // The new block 'next' will inherit its weight from 'block'
     //
     next->inheritWeight(block);
-
-    {
-        FlowEdge* const newEdge = fgAddRefPred(next, block);
-        newEdge->setLikelihood(1.0 - oldEdge->getLikelihood());
-    }
 
     {
         FlowEdge* const newEdge = fgAddRefPred(next->GetTarget(), next);
@@ -2907,16 +2915,18 @@ bool Compiler::fgOptimizeBranch(BasicBlock* bJump)
 
     /* Update bbRefs and bbPreds */
 
-    // bJump now falls through into the next block
     // bJump no longer jumps to bDest
     //
     FlowEdge* const oldEdge = fgRemoveRefPred(bDest, bJump);
-    fgAddRefPred(bJump->GetFalseTarget(), bJump, oldEdge);
+    assert(oldEdge != nullptr);
+
+    FlowEdge* const falseEdge = fgAddRefPred(bJump->GetFalseTarget(), bJump);
+    falseEdge->setLikelihood(oldEdge->getLikelihood());
 
     // bJump now jumps to bDest's normal jump target
     //
-    FlowEdge* const newEdge = fgAddRefPred(bDestNormalTarget, bJump);
-    newEdge->setLikelihood(1.0 - newEdge->getLikelihood());
+    FlowEdge* const trueEdge = fgAddRefPred(bDestNormalTarget, bJump);
+    trueEdge->setLikelihood(1.0 - falseEdge->getLikelihood());
 
     if (weightJump > 0)
     {
@@ -5009,8 +5019,8 @@ bool Compiler::fgUpdateFlowGraph(bool doTailDuplication /* = false */, bool isPh
                                 bDest->SetFalseTarget(bFixup);
                                 bFixup->inheritWeight(bDestFalseTarget);
 
-                                FlowEdge* const oldEdge = fgRemoveRefPred(bDestFalseTarget, bDest);
-                                fgAddRefPred(bFixup, bDest, oldEdge);
+                                fgRemoveRefPred(bDestFalseTarget, bDest);
+                                fgAddRefPred(bFixup, bDest);
                                 FlowEdge* const newEdge = fgAddRefPred(bDestFalseTarget, bFixup);
                                 newEdge->setLikelihood(1.0);
                             }
