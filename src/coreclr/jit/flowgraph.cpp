@@ -272,9 +272,6 @@ BasicBlock* Compiler::fgCreateGCPoll(GCPollType pollType, BasicBlock* block)
         BasicBlock* poll = fgNewBBafter(BBJ_ALWAYS, top, true);
         bottom           = fgNewBBafter(top->GetKind(), poll, true);
 
-        poll->SetTarget(bottom);
-        assert(poll->JumpsToNext());
-
         bottom->TransferTarget(top);
 
         // Update block flags
@@ -366,9 +363,12 @@ BasicBlock* Compiler::fgCreateGCPoll(GCPollType pollType, BasicBlock* block)
 
         top->SetCond(bottom, poll);
         // Bottom has Top and Poll as its predecessors.  Poll has just Top as a predecessor.
-        fgAddRefPred(bottom, poll);
         fgAddRefPred(bottom, top);
         fgAddRefPred(poll, top);
+        FlowEdge* const pollToBottomEdge = fgAddRefPred(bottom, poll);
+
+        poll->SetTargetEdge(pollToBottomEdge);
+        assert(poll->JumpsToNext());
 
         // Replace Top with Bottom in the predecessor list of all outgoing edges from Bottom
         // (1 for unconditional branches, 2 for conditional branches, N for switches).
@@ -2782,11 +2782,13 @@ void Compiler::fgInsertFuncletPrologBlock(BasicBlock* block)
             switch (predBlock->GetKind())
             {
                 case BBJ_CALLFINALLY:
+                {
                     noway_assert(predBlock->TargetIs(block));
-                    predBlock->SetTarget(newHead);
                     fgRemoveRefPred(block, predBlock);
-                    fgAddRefPred(newHead, predBlock);
+                    FlowEdge* const newEdge = fgAddRefPred(newHead, predBlock);
+                    predBlock->SetTargetEdge(newEdge);
                     break;
+                }
 
                 default:
                     // The only way into the handler is via a BBJ_CALLFINALLY (to a finally handler), or

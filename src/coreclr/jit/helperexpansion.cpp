@@ -390,8 +390,8 @@ bool Compiler::fgExpandRuntimeLookupsForCall(BasicBlock** pBlock, Statement* stm
     if (needsSizeCheck)
     {
         // sizeCheckBb is the first block after prevBb
-        prevBb->SetTarget(sizeCheckBb);
-        fgAddRefPred(sizeCheckBb, prevBb);
+        FlowEdge* const prevToSizeCheckEdge = fgAddRefPred(sizeCheckBb, prevBb);
+        prevBb->SetTargetEdge(prevToSizeCheckEdge);
         // sizeCheckBb flows into nullcheckBb in case if the size check passes
         fgAddRefPred(nullcheckBb, sizeCheckBb);
         // fallbackBb is reachable from both nullcheckBb and sizeCheckBb
@@ -403,8 +403,8 @@ bool Compiler::fgExpandRuntimeLookupsForCall(BasicBlock** pBlock, Statement* stm
     else
     {
         // nullcheckBb is the first block after prevBb
-        prevBb->SetTarget(nullcheckBb);
-        fgAddRefPred(nullcheckBb, prevBb);
+        FlowEdge* const prevToNullCheckEdge = fgAddRefPred(nullcheckBb, prevBb);
+        prevBb->SetTargetEdge(prevToNullCheckEdge);
         // No size check, nullcheckBb jumps to fast path
         fgAddRefPred(fastPathBb, nullcheckBb);
         // fallbackBb is only reachable from nullcheckBb (jump destination)

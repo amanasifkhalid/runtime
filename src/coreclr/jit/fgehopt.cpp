@@ -1758,8 +1758,8 @@ bool Compiler::fgRetargetBranchesToCanonicalCallFinally(BasicBlock*      block,
     JITDUMP("Redirecting branch in " FMT_BB " from " FMT_BB " to " FMT_BB ".\n", block->bbNum, callFinally->bbNum,
             canonicalCallFinally->bbNum);
 
-    block->SetTarget(canonicalCallFinally);
-    fgAddRefPred(canonicalCallFinally, block);
+    FlowEdge* const newEdge = fgAddRefPred(canonicalCallFinally, block);
+    block->SetTargetEdge(newEdge);
     assert(callFinally->bbRefs > 0);
     fgRemoveRefPred(callFinally, block);
 
@@ -2150,10 +2150,12 @@ void Compiler::fgTailMergeThrowsJumpToHelper(BasicBlock* predBlock,
     fgRemoveRefPred(nonCanonicalBlock, predBlock);
 
     // Wire up the new flow
+    FlowEdge* const newEdge = fgAddRefPred(canonicalBlock, predBlock, predEdge);
+    
     if (predBlock->KindIs(BBJ_ALWAYS))
     {
         assert(predBlock->TargetIs(nonCanonicalBlock));
-        predBlock->SetTarget(canonicalBlock);
+        predBlock->SetTargetEdge(newEdge);
     }
     else
     {
@@ -2162,5 +2164,4 @@ void Compiler::fgTailMergeThrowsJumpToHelper(BasicBlock* predBlock,
         predBlock->SetTrueTarget(canonicalBlock);
     }
 
-    fgAddRefPred(canonicalBlock, predBlock, predEdge);
 }

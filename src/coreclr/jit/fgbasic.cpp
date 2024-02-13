@@ -620,14 +620,14 @@ void Compiler::fgReplaceJumpTarget(BasicBlock* block, BasicBlock* oldTarget, Bas
         case BBJ_EHCATCHRET:
         case BBJ_EHFILTERRET:
         case BBJ_LEAVE: // This function can be called before import, so we still have BBJ_LEAVE
-
-            if (block->TargetIs(oldTarget))
-            {
-                block->SetTarget(newTarget);
-                FlowEdge* const oldEdge = fgRemoveRefPred(oldTarget, block);
-                fgAddRefPred(newTarget, block, oldEdge);
-            }
+        {
+            assert(block->TargetIs(oldTarget));
+            FlowEdge* const oldEdge = fgRemoveRefPred(oldTarget, block);
+            FlowEdge* const newEdge = fgAddRefPred(newTarget, block, oldEdge);
+            newEdge->setLikelihood(1.0);
+            block->SetTargetEdge(newEdge);
             break;
+        }
 
         case BBJ_COND:
 
@@ -639,7 +639,6 @@ void Compiler::fgReplaceJumpTarget(BasicBlock* block, BasicBlock* oldTarget, Bas
                     fgRemoveConditionalJump(block);
                     assert(block->KindIs(BBJ_ALWAYS));
                     assert(block->TargetIs(oldTarget));
-                    block->SetTarget(newTarget);
                 }
                 else
                 {
@@ -656,6 +655,7 @@ void Compiler::fgReplaceJumpTarget(BasicBlock* block, BasicBlock* oldTarget, Bas
                 if (block->KindIs(BBJ_ALWAYS))
                 {
                     newEdge->setLikelihood(1.0);
+                    block->SetTargetEdge(newEdge);
                 }
                 else if (oldEdge->hasLikelihood())
                 {
@@ -3838,9 +3838,9 @@ void Compiler::fgFindBasicBlocks()
                 if (block->KindIs(BBJ_EHFILTERRET))
                 {
                     // Mark catch handler as successor.
-                    block->SetTarget(hndBegBB);
                     FlowEdge* const newEdge = fgAddRefPred(hndBegBB, block);
                     newEdge->setLikelihood(1.0);
+                    block->SetTargetEdge(newEdge);
                     assert(block->GetTarget()->bbCatchTyp == BBCT_FILTER_HANDLER);
                     break;
                 }
