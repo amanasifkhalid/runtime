@@ -1558,7 +1558,7 @@ bool Compiler::fgOptimizeBranchToEmptyUnconditional(BasicBlock* block, BasicBloc
 
         // Optimize the JUMP to empty unconditional JUMP to go to the new target
         FlowEdge* const newEdge = fgAddRefPred(bDest->GetTarget(), block, fgRemoveRefPred(bDest, block));
-        
+
         switch (block->GetKind())
         {
             case BBJ_ALWAYS:

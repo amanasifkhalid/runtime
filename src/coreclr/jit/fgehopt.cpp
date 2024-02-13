@@ -2151,7 +2151,7 @@ void Compiler::fgTailMergeThrowsJumpToHelper(BasicBlock* predBlock,
 
     // Wire up the new flow
     FlowEdge* const newEdge = fgAddRefPred(canonicalBlock, predBlock, predEdge);
-    
+
     if (predBlock->KindIs(BBJ_ALWAYS))
     {
         assert(predBlock->TargetIs(nonCanonicalBlock));
@@ -2163,5 +2163,4 @@ void Compiler::fgTailMergeThrowsJumpToHelper(BasicBlock* predBlock,
         assert(predBlock->TrueTargetIs(nonCanonicalBlock));
         predBlock->SetTrueTarget(canonicalBlock);
     }
-
 }

@@ -600,10 +600,10 @@ void Compiler::optRedirectBlock(BasicBlock* blk, BlockToBlockMap* redirectMap, R
                 {
                     fgRemoveRefPred(blk->GetTarget(), blk);
                 }
-                blk->SetTarget(newJumpDest);
                 if (updatePreds || addPreds)
                 {
-                    fgAddRefPred(newJumpDest, blk);
+                    FlowEdge* const newEdge = fgAddRefPred(newJumpDest, blk);
+                    blk->SetTargetEdge(newEdge);
                 }
             }
             else if (addPreds)

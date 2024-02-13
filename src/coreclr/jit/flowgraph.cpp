@@ -5616,6 +5616,9 @@ void FlowGraphNaturalLoop::Duplicate(BasicBlock** insertAfter, BlockToBlockMap* 
         // Now redirect the new block according to "blockMap".
         comp->optRedirectBlock(newBlk, map);
 
+        // TODO: fix
+        assert(false);
+
         // Add predecessor edges for the new successors, as well as the fall-through paths.
         switch (newBlk->GetKind())
         {

@@ -14651,8 +14651,8 @@ bool Compiler::fgExpandQmarkForCastInstOf(BasicBlock* block, Statement* stmt)
 
     // Chain the flow correctly.
     assert(block->KindIs(BBJ_ALWAYS));
-    block->SetTarget(asgBlock);
-    fgAddRefPred(asgBlock, block);
+    FlowEdge* const blockToAsgBlockEdge = fgAddRefPred(asgBlock, block);
+    block->SetTargetEdge(blockToAsgBlockEdge);
     fgAddRefPred(cond1Block, asgBlock);
     fgAddRefPred(remainderBlock, helperBlock);
 
@@ -14874,15 +14874,16 @@ bool Compiler::fgExpandQmarkStmt(BasicBlock* block, Statement* stmt)
     assert(condBlock->bbWeight == remainderBlock->bbWeight);
 
     assert(block->KindIs(BBJ_ALWAYS));
-    block->SetTarget(condBlock);
-    condBlock->SetTarget(elseBlock);
-    elseBlock->SetTarget(remainderBlock);
+
+    FlowEdge* const blockToCondEdge = fgAddRefPred(condBlock, block);
+    block->SetTargetEdge(blockToCondEdge);
+    FlowEdge* const condToElseEdge = fgAddRefPred(elseBlock, condBlock);
+    condBlock->SetTargetEdge(condToElseEdge);
+    FlowEdge* const elseToRemainderEdge = fgAddRefPred(remainderBlock, elseBlock);
+    elseBlock->SetTargetEdge(elseToRemainderEdge);
+
     assert(condBlock->JumpsToNext());
     assert(elseBlock->JumpsToNext());
-
-    fgAddRefPred(condBlock, block);
-    fgAddRefPred(elseBlock, condBlock);
-    fgAddRefPred(remainderBlock, elseBlock);
 
     condBlock->SetFlags(propagateFlagsToAll | BBF_NONE_QUIRK);
     elseBlock->SetFlags(propagateFlagsToAll | BBF_NONE_QUIRK);

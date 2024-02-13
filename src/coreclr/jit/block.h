@@ -638,20 +638,13 @@ public:
         return bbTargetEdge->getDestinationBlock();
     }
 
-    void SetTarget(BasicBlock* target)
-    {
-        // SetKindAndTarget() nulls target for non-jump kinds,
-        // so don't use SetTarget() to null bbTarget without updating bbKind.
-        bbTarget = target;
-        assert(HasInitializedTarget());
-    }
-
     void SetTargetEdge(FlowEdge* targetEdge)
     {
         // SetKindAndTarget() nulls target for non-jump kinds,
         // so don't use SetTarget() to null bbTargetEdge without updating bbKind.
         bbTargetEdge = targetEdge;
         assert(HasInitializedTarget());
+        assert(bbTargetEdge->getSourceBlock() == this);
     }
 
     BasicBlock* GetTrueTarget() const
