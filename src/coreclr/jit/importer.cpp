@@ -7666,14 +7666,14 @@ void Compiler::impImportBlockCode(BasicBlock* block)
                     // Find the jump target
                     size_t       switchVal = (size_t)op1->AsIntCon()->gtIconVal;
                     unsigned     jumpCnt   = block->GetSwitchTargets()->bbsCount;
-                    BasicBlock** jumpTab   = block->GetSwitchTargets()->bbsDstTab;
+                    FlowEdge**   jumpTab   = block->GetSwitchTargets()->bbsDstTab;
                     bool         foundVal  = false;
 
                     for (unsigned val = 0; val < jumpCnt; val++, jumpTab++)
                     {
-                        BasicBlock* curJump = *jumpTab;
+                        FlowEdge* curEdge = *jumpTab;
 
-                        assert(curJump->countOfInEdges() > 0);
+                        assert(curEdge->getDestinationBlock()->countOfInEdges() > 0);
 
                         // If val matches switchVal or we are at the last entry and
                         // we never found the switch value then set the new jump dest
@@ -7681,13 +7681,13 @@ void Compiler::impImportBlockCode(BasicBlock* block)
                         if ((val == switchVal) || (!foundVal && (val == jumpCnt - 1)))
                         {
                             // transform the basic block into a BBJ_ALWAYS
-                            block->SetKindAndTargetEdge(BBJ_ALWAYS, curJump);
+                            block->SetKindAndTargetEdge(BBJ_ALWAYS, curEdge);
                             foundVal = true;
                         }
                         else
                         {
-                            // Remove 'block' from the predecessor list of 'curJump'
-                            fgRemoveRefPred(curJump, block);
+                            // Remove 'curEdge'
+                            fgRemoveRefPred(curEdge->getDestinationBlock(), block);
                         }
                     }
 

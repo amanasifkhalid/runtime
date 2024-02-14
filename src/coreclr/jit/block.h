@@ -1878,7 +1878,7 @@ public:
 //
 struct BBswtDesc
 {
-    BasicBlock** bbsDstTab; // case label table address
+    FlowEdge**   bbsDstTab; // case label table address
     unsigned     bbsCount;  // count of cases (includes 'default' if bbsHasDefault)
 
     // Case number and likelihood of most likely case
@@ -1907,7 +1907,7 @@ struct BBswtDesc
     {
         assert(bbsHasDefault);
         assert(bbsCount > 0);
-        return bbsDstTab[bbsCount - 1];
+        return bbsDstTab[bbsCount - 1]->getDestinationBlock();
     }
 };
 

@@ -1815,7 +1815,7 @@ bool Compiler::fgOptimizeSwitchBranches(BasicBlock* block)
     assert(block->KindIs(BBJ_SWITCH));
 
     unsigned     jmpCnt = block->GetSwitchTargets()->bbsCount;
-    BasicBlock** jmpTab = block->GetSwitchTargets()->bbsDstTab;
+    FlowEdge**   jmpTab = block->GetSwitchTargets()->bbsDstTab;
     BasicBlock*  bNewDest; // the new jump target for the current switch case
     BasicBlock*  bDest;
     bool         returnvalue = false;
@@ -1823,7 +1823,7 @@ bool Compiler::fgOptimizeSwitchBranches(BasicBlock* block)
     do
     {
     REPEAT_SWITCH:;
-        bDest    = *jmpTab;
+        bDest    = (*jmpTab)->getDestinationBlock();
         bNewDest = bDest;
 
         // Do we have a JUMP to an empty unconditional JUMP block?
@@ -1878,13 +1878,12 @@ bool Compiler::fgOptimizeSwitchBranches(BasicBlock* block)
                 }
             }
 
-            // Update the switch jump table
-            *jmpTab = bNewDest;
-
             // Maintain, if necessary, the set of unique targets of "block."
             UpdateSwitchTableTarget(block, bDest, bNewDest);
 
-            fgAddRefPred(bNewDest, block, fgRemoveRefPred(bDest, block));
+            // Update the switch jump table
+            FlowEdge* const newEdge = fgAddRefPred(bNewDest, block, fgRemoveRefPred(bDest, block));
+            *jmpTab = newEdge;
 
             // we optimized a Switch label - goto REPEAT_SWITCH to follow this new jump
             returnvalue = true;
@@ -2004,17 +2003,14 @@ bool Compiler::fgOptimizeSwitchBranches(BasicBlock* block)
 
         // Change the switch jump into a BBJ_ALWAYS
         block->SetKindAndTargetEdge(BBJ_ALWAYS, block->GetSwitchTargets()->bbsDstTab[0]);
-        if (jmpCnt > 1)
+        for (unsigned i = 1; i < jmpCnt; ++i)
         {
-            for (unsigned i = 1; i < jmpCnt; ++i)
-            {
-                (void)fgRemoveRefPred(jmpTab[i], block);
-            }
+            fgRemoveRefPred(jmpTab[i]->getDestinationBlock(), block);
         }
 
         return true;
     }
-    else if ((block->GetSwitchTargets()->bbsCount == 2) && block->NextIs(block->GetSwitchTargets()->bbsDstTab[1]))
+    else if ((block->GetSwitchTargets()->bbsCount == 2) && block->NextIs(block->GetSwitchTargets()->bbsDstTab[1]->getDestinationBlock()))
     {
         /* Use a BBJ_COND(switchVal==0) for a switch with only one
            significant clause besides the default clause, if the
@@ -3008,7 +3004,7 @@ bool Compiler::fgOptimizeSwitchJumps()
         // The dominant case should not be the default case, as we already peel that one.
         //
         assert(dominantCase < (block->GetSwitchTargets()->bbsCount - 1));
-        BasicBlock* const dominantTarget = block->GetSwitchTargets()->bbsDstTab[dominantCase];
+        BasicBlock* const dominantTarget = block->GetSwitchTargets()->bbsDstTab[dominantCase]->getDestinationBlock();
         Statement* const  switchStmt     = block->lastStmt();
         GenTree* const    switchTree     = switchStmt->GetRootNode();
         assert(switchTree->OperIs(GT_SWITCH));

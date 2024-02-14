@@ -1798,7 +1798,7 @@ BBswtDesc::BBswtDesc(Compiler* comp, const BBswtDesc* other)
 {
     // Allocate and fill in a new dst tab
     //
-    bbsDstTab = new (comp, CMK_BasicBlock) BasicBlock*[bbsCount];
+    bbsDstTab = new (comp, CMK_FlowEdge) FlowEdge*[bbsCount];
     for (unsigned i = 0; i < bbsCount; i++)
     {
         bbsDstTab[i] = other->bbsDstTab[i];

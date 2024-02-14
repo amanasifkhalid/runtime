@@ -2066,12 +2066,12 @@ void Compiler::fgTableDispBasicBlock(const BasicBlock* block,
 
                 const BBswtDesc* const jumpSwt = block->GetSwitchTargets();
                 const unsigned         jumpCnt = jumpSwt->bbsCount;
-                BasicBlock** const     jumpTab = jumpSwt->bbsDstTab;
+                FlowEdge** const       jumpTab = jumpSwt->bbsDstTab;
 
                 for (unsigned i = 0; i < jumpCnt; i++)
                 {
                     printedBlockWidth += 1 /* space/comma */;
-                    printf("%c%s", (i == 0) ? ' ' : ',', dspBlockNum(jumpTab[i]));
+                    printf("%c%s", (i == 0) ? ' ' : ',', dspBlockNum(jumpTab[i]->getDestinationBlock()));
 
                     const bool isDefault = jumpSwt->bbsHasDefault && (i == jumpCnt - 1);
                     if (isDefault)

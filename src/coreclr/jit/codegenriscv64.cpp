@@ -2853,7 +2853,7 @@ void CodeGen::genJumpTable(GenTree* treeNode)
     assert(treeNode->OperGet() == GT_JMPTABLE);
 
     unsigned     jumpCount = compiler->compCurBB->GetSwitchTargets()->bbsCount;
-    BasicBlock** jumpTable = compiler->compCurBB->GetSwitchTargets()->bbsDstTab;
+    FlowEdge**   jumpTable = compiler->compCurBB->GetSwitchTargets()->bbsDstTab;
     unsigned     jmpTabOffs;
     unsigned     jmpTabBase;
 
@@ -2865,7 +2865,7 @@ void CodeGen::genJumpTable(GenTree* treeNode)
 
     for (unsigned i = 0; i < jumpCount; i++)
     {
-        BasicBlock* target = *jumpTable++;
+        BasicBlock* target = (*jumpTable)->getDestinationBlock();
         noway_assert(target->HasFlag(BBF_HAS_LABEL));
 
         JITDUMP("            DD      L_M%03u_" FMT_BB "\n", compiler->compMethodID, target->bbNum);

@@ -679,17 +679,17 @@ void Compiler::fgReplaceJumpTarget(BasicBlock* block, BasicBlock* oldTarget, Bas
         case BBJ_SWITCH:
         {
             unsigned const     jumpCnt = block->GetSwitchTargets()->bbsCount;
-            BasicBlock** const jumpTab = block->GetSwitchTargets()->bbsDstTab;
+            FlowEdge** const   jumpTab = block->GetSwitchTargets()->bbsDstTab;
             bool               changed = false;
 
             for (unsigned i = 0; i < jumpCnt; i++)
             {
-                if (jumpTab[i] == oldTarget)
+                if (jumpTab[i]->getDestinationBlock() == oldTarget)
                 {
-                    jumpTab[i]              = newTarget;
                     changed                 = true;
                     FlowEdge* const oldEdge = fgRemoveRefPred(oldTarget, block);
                     FlowEdge* const newEdge = fgAddRefPred(newTarget, block, oldEdge);
+                    jumpTab[i] = newEdge;
 
                     // Handle the profile update, once we get our hands on the old edge.
                     // (see notes in fgChangeSwitchBlock for why this extra step is necessary)
@@ -2974,22 +2974,22 @@ void Compiler::fgLinkBasicBlocks()
             case BBJ_SWITCH:
             {
                 unsigned     jumpCnt = curBBdesc->GetSwitchTargets()->bbsCount;
-                BasicBlock** jumpPtr = curBBdesc->GetSwitchTargets()->bbsDstTab;
+                FlowEdge**   jumpPtr = curBBdesc->GetSwitchTargets()->bbsDstTab;
 
                 do
                 {
                     BasicBlock* jumpDest = fgLookupBB((unsigned)*(size_t*)jumpPtr);
-                    *jumpPtr             = jumpDest;
-                    fgAddRefPred<initializingPreds>(jumpDest, curBBdesc);
-                    if ((*jumpPtr)->bbNum <= curBBdesc->bbNum)
+                    FlowEdge* const newEdge = fgAddRefPred<initializingPreds>(jumpDest, curBBdesc);
+                    *jumpPtr             = newEdge;
+                    if (jumpDest->bbNum <= curBBdesc->bbNum)
                     {
-                        fgMarkBackwardJump(*jumpPtr, curBBdesc);
+                        fgMarkBackwardJump(jumpDest, curBBdesc);
                     }
                 } while (++jumpPtr, --jumpCnt);
 
                 /* Default case of CEE_SWITCH (next block), is at end of jumpTab[] */
 
-                noway_assert(curBBdesc->NextIs(*(jumpPtr - 1)));
+                noway_assert(curBBdesc->NextIs(*(jumpPtr - 1)->getDestinationBlock()));
                 break;
             }
 
@@ -3152,8 +3152,8 @@ unsigned Compiler::fgMakeBasicBlocks(const BYTE* codeAddr, IL_OFFSET codeSize, F
                 unsigned jmpBase;
                 unsigned jmpCnt; // # of switch cases (excluding default)
 
-                BasicBlock** jmpTab;
-                BasicBlock** jmpPtr;
+                FlowEdge** jmpTab;
+                FlowEdge** jmpPtr;
 
                 /* Allocate the switch descriptor */
 
@@ -3170,7 +3170,7 @@ unsigned Compiler::fgMakeBasicBlocks(const BYTE* codeAddr, IL_OFFSET codeSize, F
 
                 /* Allocate the jump table */
 
-                jmpPtr = jmpTab = new (this, CMK_BasicBlock) BasicBlock*[jmpCnt + 1];
+                jmpPtr = jmpTab = new (this, CMK_FlowEdge) FlowEdge*[jmpCnt + 1];
 
                 /* Fill in the jump table */
 
@@ -3180,12 +3180,12 @@ unsigned Compiler::fgMakeBasicBlocks(const BYTE* codeAddr, IL_OFFSET codeSize, F
                     codeAddr += 4;
 
                     // store the offset in the pointer.  We change these in fgLinkBasicBlocks().
-                    *jmpPtr++ = (BasicBlock*)(size_t)(jmpBase + jmpDist);
+                    *jmpPtr++ = (FlowEdge*)(size_t)(jmpBase + jmpDist);
                 }
 
                 /* Append the default label to the target table */
 
-                *jmpPtr++ = (BasicBlock*)(size_t)jmpBase;
+                *jmpPtr++ = (FlowEdge*)(size_t)jmpBase;
 
                 /* Make sure we found the right number of labels */
 
