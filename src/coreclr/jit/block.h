@@ -1930,8 +1930,8 @@ inline BBArrayIterator BBSwitchTargetList::end() const
 //
 struct BBehfDesc
 {
-    BasicBlock** bbeSuccs; // array of `BasicBlock*` pointing to BBJ_EHFINALLYRET block successors
-    unsigned     bbeCount; // size of `bbeSuccs` array
+    FlowEdge** bbeSuccs; // array of `FlowEdge*` pointing to BBJ_EHFINALLYRET block successors
+    unsigned   bbeCount; // size of `bbeSuccs` array
 
     BBehfDesc() : bbeSuccs(nullptr), bbeCount(0)
     {
