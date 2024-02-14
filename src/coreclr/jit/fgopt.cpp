@@ -623,7 +623,7 @@ PhaseStatus Compiler::fgPostImportationCleanup()
 
                         // What follows is similar to fgNewBBInRegion, but we can't call that
                         // here as the oldTryEntry is no longer in the main bb list.
-                        newTryEntry = BasicBlock::New(this, BBJ_ALWAYS, tryEntryPrev->Next());
+                        newTryEntry = BasicBlock::New(this);
                         newTryEntry->SetFlags(BBF_IMPORTED | BBF_INTERNAL | BBF_NONE_QUIRK);
                         newTryEntry->bbRefs = 0;
 
@@ -649,6 +649,7 @@ PhaseStatus Compiler::fgPostImportationCleanup()
                         {
                             FlowEdge* const newEdge = fgAddRefPred(newTryEntry->Next(), newTryEntry);
                             newEdge->setLikelihood(1.0);
+                            newTryEntry->SetKindAndTargetEdge(BBJ_ALWAYS, newEdge);
                         }
 
                         JITDUMP("OSR: changing start of try region #%u from " FMT_BB " to new " FMT_BB "\n",

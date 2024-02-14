@@ -14628,10 +14628,10 @@ bool Compiler::fgExpandQmarkForCastInstOf(BasicBlock* block, Statement* stmt)
     BasicBlock*     remainderBlock = fgSplitBlockAfterStatement(block, stmt);
     fgRemoveRefPred(remainderBlock, block); // We're going to put more blocks between block and remainderBlock.
 
-    BasicBlock* helperBlock = fgNewBBafter(BBJ_ALWAYS, block, true, block->Next());
-    BasicBlock* cond2Block  = fgNewBBafter(BBJ_COND, block, true, remainderBlock);
-    BasicBlock* cond1Block  = fgNewBBafter(BBJ_COND, block, true, remainderBlock);
-    BasicBlock* asgBlock    = fgNewBBafter(BBJ_ALWAYS, block, true, block->Next());
+    BasicBlock* helperBlock = fgNewBBafter(BBJ_ALWAYS, block, true);
+    BasicBlock* cond2Block  = fgNewBBafter(BBJ_COND, block, true);
+    BasicBlock* cond1Block  = fgNewBBafter(BBJ_COND, block, true);
+    BasicBlock* asgBlock    = fgNewBBafter(BBJ_ALWAYS, block, true);
 
     block->RemoveFlags(BBF_NEEDS_GCPOLL);
     remainderBlock->SetFlags(propagateFlags);
@@ -14656,17 +14656,22 @@ bool Compiler::fgExpandQmarkForCastInstOf(BasicBlock* block, Statement* stmt)
     assert(block->KindIs(BBJ_ALWAYS));
     FlowEdge* const blockToAsgBlockEdge = fgAddRefPred(asgBlock, block);
     block->SetTargetEdge(blockToAsgBlockEdge);
-    fgAddRefPred(cond1Block, asgBlock);
-    fgAddRefPred(remainderBlock, helperBlock);
-
-    FlowEdge* const toCond2Edge = fgAddRefPred(cond2Block, cond1Block);
-    cond1Block->SetFalseEdge(toCond2Edge);
-
-    FlowEdge* const toHelperEdge = fgAddRefPred(helperBlock, cond2Block);
-    cond2Block->SetFalseEdge(toHelperEdge);
     
-    fgAddRefPred(remainderBlock, cond1Block);
-    fgAddRefPred(remainderBlock, cond2Block);
+    FlowEdge* const asgToCond1Edge = fgAddRefPred(cond1Block, asgBlock);
+    asgBlock->SetTargetEdge(asgToCond1Edge);
+    
+    FlowEdge* const helperToRemainderEdge = fgAddRefPred(remainderBlock, helperBlock);
+    helperBlock->SetTargetEdge(helperToRemainderEdge);
+
+    FlowEdge* const cond1TrueEdge = fgAddRefPred(remainderBlock, cond1Block);
+    FlowEdge* const cond1FalseEdge = fgAddRefPred(cond2Block, cond1Block);
+    cond1Block->SetTrueEdge(cond1TrueEdge);
+    cond1Block->SetFalseEdge(cond1FalseEdge);
+
+    FlowEdge* const cond2TrueEdge = fgAddRefPred(remainderBlock, cond2Block);
+    FlowEdge* const cond2FalseEdge = fgAddRefPred(helperBlock, cond2Block);
+    cond2Block->SetTrueEdge(cond2TrueEdge);
+    cond2Block->SetFalseEdge(cond2FalseEdge);
 
     // Set the weights; some are guesses.
     asgBlock->inheritWeight(block);
@@ -14906,7 +14911,7 @@ bool Compiler::fgExpandQmarkStmt(BasicBlock* block, Statement* stmt)
         //
         gtReverseCond(condExpr);
 
-        thenBlock = fgNewBBafter(BBJ_ALWAYS, condBlock, true, remainderBlock);
+        thenBlock = fgNewBBafter(BBJ_ALWAYS, condBlock, true);
         thenBlock->SetFlags(propagateFlagsToAll);
         if (!block->HasFlag(BBF_INTERNAL))
         {
@@ -14914,9 +14919,10 @@ bool Compiler::fgExpandQmarkStmt(BasicBlock* block, Statement* stmt)
             thenBlock->SetFlags(BBF_IMPORTED);
         }
 
-        FlowEdge* const condToThenEdge = fgAddRefPred(thenBlock, condBlock);
-        fgAddRefPred(remainderBlock, thenBlock);
+        FlowEdge* const thenToRemainderEdge = fgAddRefPred(remainderBlock, thenBlock);
+        thenBlock->SetTargetEdge(thenToRemainderEdge);
 
+        FlowEdge* const condToThenEdge = fgAddRefPred(thenBlock, condBlock);
         condBlock->SetCond(condToElseEdge, condToThenEdge);
 
         thenBlock->inheritWeightPercentage(condBlock, qmark->ThenNodeLikelihood());

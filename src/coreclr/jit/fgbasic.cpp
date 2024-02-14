@@ -207,7 +207,7 @@ bool Compiler::fgEnsureFirstBBisScratch()
 
     assert(fgFirstBBScratch == nullptr);
 
-    BasicBlock* block = BasicBlock::New(this, BBJ_ALWAYS, fgFirstBB);
+    BasicBlock* block = BasicBlock::New(this, BBJ_ALWAYS);
     block->SetFlags(BBF_NONE_QUIRK);
 
     if (fgFirstBB != nullptr)
@@ -229,6 +229,7 @@ bool Compiler::fgEnsureFirstBBisScratch()
         FlowEdge* const edge = fgAddRefPred(fgFirstBB, block);
         edge->setLikelihood(1.0);
         fgInsertBBbefore(fgFirstBB, block);
+        block->SetTargetEdge(edge);
     }
     else
     {
@@ -5002,14 +5003,14 @@ BasicBlock* Compiler::fgSplitEdge(BasicBlock* curr, BasicBlock* succ)
         // no fall-through path). For this case, simply insert a new
         // fall-through block after 'curr'.
         // TODO-NoFallThrough: Once bbFalseTarget can diverge from bbNext, this will be unnecessary for BBJ_COND
-        newBlock = fgNewBBafter(BBJ_ALWAYS, curr, true /* extendRegion */, /* jumpDest */ succ);
+        newBlock = fgNewBBafter(BBJ_ALWAYS, curr, true /* extendRegion */);
         newBlock->SetFlags(BBF_NONE_QUIRK);
         assert(newBlock->JumpsToNext());
     }
     else
     {
         // The new block always jumps to 'succ'
-        newBlock = fgNewBBinRegion(BBJ_ALWAYS, curr, /* jumpDest */ succ, /* isRunRarely */ curr->isRunRarely());
+        newBlock = fgNewBBinRegion(BBJ_ALWAYS, curr, /* isRunRarely */ curr->isRunRarely());
     }
     newBlock->CopyFlags(curr, succ->GetFlagsRaw() & BBF_BACKWARD_JUMP);
 
@@ -5022,6 +5023,7 @@ BasicBlock* Compiler::fgSplitEdge(BasicBlock* curr, BasicBlock* succ)
     // And 'succ' has 'newBlock' as a new predecessor.
     FlowEdge* const newEdge = fgAddRefPred(succ, newBlock);
     newEdge->setLikelihood(1.0);
+    newBlock->SetTargetEdge(newEdge);
 
     // This isn't accurate, but it is complex to compute a reasonable number so just assume that we take the
     // branch 50% of the time.
@@ -5403,8 +5405,9 @@ BasicBlock* Compiler::fgConnectFallThrough(BasicBlock* bSrc, BasicBlock* bDst)
     if (bSrc->KindIs(BBJ_COND) && bSrc->FalseTargetIs(bDst) && !bSrc->NextIs(bDst))
     {
         // Add a new block after bSrc which jumps to 'bDst'
-        jmpBlk = fgNewBBafter(BBJ_ALWAYS, bSrc, true, bDst);
+        jmpBlk = fgNewBBafter(BBJ_ALWAYS, bSrc, true);
         FlowEdge* const newEdge = fgAddRefPred(jmpBlk, bSrc, bSrc->GetFalseEdge());
+        FlowEdge* const edgeToDst = bSrc->GetFalseEdge();
         bSrc->SetFalseEdge(newEdge);
 
         // When adding a new jmpBlk we will set the bbWeight and bbFlags
@@ -5449,6 +5452,8 @@ BasicBlock* Compiler::fgConnectFallThrough(BasicBlock* bSrc, BasicBlock* bDst)
         }
 
         fgReplacePred(bDst, bSrc, jmpBlk);
+        assert(edgeToDst->getSourceBlock() == jmpBlk);
+        jmpBlk->SetTargetEdge(edgeToDst);
 
         JITDUMP("Added an unconditional jump to " FMT_BB " after block " FMT_BB "\n", jmpBlk->GetTarget()->bbNum,
                 bSrc->bbNum);
@@ -6008,12 +6013,11 @@ DONE:
 
 BasicBlock* Compiler::fgNewBBbefore(BBKinds     jumpKind,
                                     BasicBlock* block,
-                                    bool        extendRegion,
-                                    BasicBlock* jumpDest /* = nullptr */)
+                                    bool        extendRegion)
 {
     // Create a new BasicBlock and chain it in
 
-    BasicBlock* newBlk = BasicBlock::New(this, jumpKind, jumpDest);
+    BasicBlock* newBlk = BasicBlock::New(this, jumpKind);
     newBlk->SetFlags(BBF_INTERNAL);
 
     fgInsertBBbefore(block, newBlk);
@@ -6050,12 +6054,11 @@ BasicBlock* Compiler::fgNewBBbefore(BBKinds     jumpKind,
 
 BasicBlock* Compiler::fgNewBBafter(BBKinds     jumpKind,
                                    BasicBlock* block,
-                                   bool        extendRegion,
-                                   BasicBlock* jumpDest /* = nullptr */)
+                                   bool        extendRegion)
 {
     // Create a new BasicBlock and chain it in
 
-    BasicBlock* newBlk = BasicBlock::New(this, jumpKind, jumpDest);
+    BasicBlock* newBlk = BasicBlock::New(this, jumpKind);
     newBlk->SetFlags(BBF_INTERNAL);
 
     fgInsertBBafter(block, newBlk);
@@ -6095,7 +6098,6 @@ BasicBlock* Compiler::fgNewBBafter(BBKinds     jumpKind,
 //    tree              - tree that will be wrapped into a statement and
 //                        inserted in the new block.
 //    debugInfo         - debug info to propagate into the new statement.
-//    jumpDest          - the jump target of the new block. Defaults to nullptr.
 //    updateSideEffects - update side effects for the whole statement.
 //
 // Return Value:
@@ -6108,10 +6110,9 @@ BasicBlock* Compiler::fgNewBBFromTreeAfter(BBKinds     jumpKind,
                                            BasicBlock* block,
                                            GenTree*    tree,
                                            DebugInfo&  debugInfo,
-                                           BasicBlock* jumpDest /* = nullptr */,
                                            bool        updateSideEffects /* = false */)
 {
-    BasicBlock* newBlock = fgNewBBafter(jumpKind, block, true, jumpDest);
+    BasicBlock* newBlock = fgNewBBafter(jumpKind, block, true);
     newBlock->SetFlags(BBF_INTERNAL);
     Statement* stmt = fgNewStmtFromTree(tree, debugInfo);
     fgInsertStmtAtEnd(newBlock, stmt);
@@ -6533,7 +6534,6 @@ DONE:
 //               [0..compHndBBtabCount].
 //    nearBlk  - insert the new block closely after this block, if possible. If nullptr, put the new block anywhere
 //               in the requested region.
-//    jumpDest - the jump target of the new block. Defaults to nullptr.
 //    putInFilter - put the new block in the filter region given by hndIndex, as described above.
 //    runRarely - 'true' if the new block is run rarely.
 //    insertAtEnd - 'true' if the block should be inserted at the end of the region. Note: this is currently only
@@ -6546,7 +6546,6 @@ BasicBlock* Compiler::fgNewBBinRegion(BBKinds     jumpKind,
                                       unsigned    tryIndex,
                                       unsigned    hndIndex,
                                       BasicBlock* nearBlk,
-                                      BasicBlock* jumpDest /* = nullptr */,
                                       bool        putInFilter /* = false */,
                                       bool        runRarely /* = false */,
                                       bool        insertAtEnd /* = false */)
@@ -6672,7 +6671,7 @@ _FoundAfterBlk:;
             bbKindNames[jumpKind], tryIndex, hndIndex, dspBool(putInFilter), dspBool(runRarely), dspBool(insertAtEnd),
             afterBlk->bbNum);
 
-    return fgNewBBinRegionWorker(jumpKind, afterBlk, regionIndex, putInTryRegion, jumpDest);
+    return fgNewBBinRegionWorker(jumpKind, afterBlk, regionIndex, putInTryRegion);
 }
 
 //------------------------------------------------------------------------
@@ -6683,7 +6682,6 @@ _FoundAfterBlk:;
 // Arguments:
 //    jumpKind - the jump kind of the new block to create.
 //    srcBlk   - insert the new block in the same EH region as this block, and closely after it if possible.
-//    jumpDest - the jump target of the new block. Defaults to nullptr.
 //    runRarely - 'true' if the new block is run rarely.
 //    insertAtEnd - 'true' if the block should be inserted at the end of the region. Note: this is currently only
 //                  implemented when inserting into the main function (not into any EH region).
@@ -6693,7 +6691,6 @@ _FoundAfterBlk:;
 
 BasicBlock* Compiler::fgNewBBinRegion(BBKinds     jumpKind,
                                       BasicBlock* srcBlk,
-                                      BasicBlock* jumpDest /* = nullptr */,
                                       bool        runRarely /* = false */,
                                       bool        insertAtEnd /* = false */)
 {
@@ -6712,7 +6709,7 @@ BasicBlock* Compiler::fgNewBBinRegion(BBKinds     jumpKind,
         putInFilter = ehGetDsc(hndIndex - 1)->InFilterRegionBBRange(srcBlk);
     }
 
-    return fgNewBBinRegion(jumpKind, tryIndex, hndIndex, srcBlk, jumpDest, putInFilter, runRarely, insertAtEnd);
+    return fgNewBBinRegion(jumpKind, tryIndex, hndIndex, srcBlk, putInFilter, runRarely, insertAtEnd);
 }
 
 //------------------------------------------------------------------------
@@ -6722,14 +6719,13 @@ BasicBlock* Compiler::fgNewBBinRegion(BBKinds     jumpKind,
 //
 // Arguments:
 //    jumpKind - the jump kind of the new block to create.
-//    jumpDest - the jump target of the new block. Defaults to nullptr.
 //
 // Return Value:
 //    The new block.
 
-BasicBlock* Compiler::fgNewBBinRegion(BBKinds jumpKind, BasicBlock* jumpDest /* = nullptr */)
+BasicBlock* Compiler::fgNewBBinRegion(BBKinds jumpKind)
 {
-    return fgNewBBinRegion(jumpKind, 0, 0, nullptr, jumpDest, /* putInFilter */ false, /* runRarely */ false,
+    return fgNewBBinRegion(jumpKind, 0, 0, nullptr, /* putInFilter */ false, /* runRarely */ false,
                            /* insertAtEnd */ true);
 }
 
@@ -6748,7 +6744,6 @@ BasicBlock* Compiler::fgNewBBinRegion(BBKinds jumpKind, BasicBlock* jumpDest /* 
 //          set its handler index to the most nested handler region enclosing that 'try' region.
 //          Otherwise, put the block in the handler region specified by 'regionIndex', and set its 'try'
 //          index to the most nested 'try' region enclosing that handler region.
-//    jumpDest - the jump target of the new block. Defaults to nullptr.
 //
 // Return Value:
 //    The new block.
@@ -6756,13 +6751,12 @@ BasicBlock* Compiler::fgNewBBinRegion(BBKinds jumpKind, BasicBlock* jumpDest /* 
 BasicBlock* Compiler::fgNewBBinRegionWorker(BBKinds     jumpKind,
                                             BasicBlock* afterBlk,
                                             unsigned    regionIndex,
-                                            bool        putInTryRegion,
-                                            BasicBlock* jumpDest /* = nullptr */)
+                                            bool        putInTryRegion)
 {
     /* Insert the new block */
     BasicBlock* afterBlkNext = afterBlk->Next();
     (void)afterBlkNext; // prevent "unused variable" error from GCC
-    BasicBlock* newBlk = fgNewBBafter(jumpKind, afterBlk, false, jumpDest);
+    BasicBlock* newBlk = fgNewBBafter(jumpKind, afterBlk, false);
 
     if (putInTryRegion)
     {

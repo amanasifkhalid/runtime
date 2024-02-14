@@ -2947,7 +2947,7 @@ bool Compiler::optCreatePreheader(FlowGraphNaturalLoop* loop)
         insertBefore = header;
     }
 
-    BasicBlock* preheader = fgNewBBbefore(BBJ_ALWAYS, insertBefore, false, header);
+    BasicBlock* preheader = fgNewBBbefore(BBJ_ALWAYS, insertBefore, false);
     preheader->SetFlags(BBF_INTERNAL);
     fgSetEHRegionForNewPreheader(preheader);
 
@@ -2960,7 +2960,8 @@ bool Compiler::optCreatePreheader(FlowGraphNaturalLoop* loop)
 
     JITDUMP("Created new preheader " FMT_BB " for " FMT_LP "\n", preheader->bbNum, loop->GetIndex());
 
-    fgAddRefPred(header, preheader);
+    FlowEdge* const newEdge = fgAddRefPred(header, preheader);
+    preheader->SetTargetEdge(newEdge);
 
     for (FlowEdge* enterEdge : loop->EntryEdges())
     {

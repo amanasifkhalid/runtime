@@ -218,13 +218,12 @@ private:
         // Arguments:
         //    jumpKind - jump kind for the new basic block
         //    insertAfter - basic block, after which compiler has to insert the new one.
-        //    jumpDest - jump target for the new basic block. Defaults to nullptr.
         //
         // Return Value:
         //    new basic block.
-        BasicBlock* CreateAndInsertBasicBlock(BBKinds jumpKind, BasicBlock* insertAfter, BasicBlock* jumpDest = nullptr)
+        BasicBlock* CreateAndInsertBasicBlock(BBKinds jumpKind, BasicBlock* insertAfter)
         {
-            BasicBlock* block = compiler->fgNewBBafter(jumpKind, insertAfter, true, jumpDest);
+            BasicBlock* block = compiler->fgNewBBafter(jumpKind, insertAfter, true);
             block->SetFlags(BBF_IMPORTED);
             return block;
         }
@@ -376,7 +375,7 @@ private:
         {
             assert(checkIdx == 0);
 
-            checkBlock = CreateAndInsertBasicBlock(BBJ_ALWAYS, currBlock, currBlock->Next());
+            checkBlock = CreateAndInsertBasicBlock(BBJ_ALWAYS, currBlock);
             checkBlock->SetFlags(BBF_NONE_QUIRK);
             GenTree*   fatPointerMask  = new (compiler, GT_CNS_INT) GenTreeIntCon(TYP_I_IMPL, FAT_POINTER_MASK);
             GenTree*   fptrAddressCopy = compiler->gtCloneExpr(fptrAddress);
@@ -395,7 +394,7 @@ private:
         virtual void CreateThen(uint8_t checkIdx)
         {
             assert(remainderBlock != nullptr);
-            thenBlock                     = CreateAndInsertBasicBlock(BBJ_ALWAYS, checkBlock, remainderBlock);
+            thenBlock                     = CreateAndInsertBasicBlock(BBJ_ALWAYS, checkBlock);
             Statement* copyOfOriginalStmt = compiler->gtCloneStmt(stmt);
             compiler->fgInsertStmtAtEnd(thenBlock, copyOfOriginalStmt);
         }
@@ -405,7 +404,7 @@ private:
         //
         virtual void CreateElse()
         {
-            elseBlock = CreateAndInsertBasicBlock(BBJ_ALWAYS, thenBlock, thenBlock->Next());
+            elseBlock = CreateAndInsertBasicBlock(BBJ_ALWAYS, thenBlock);
             elseBlock->SetFlags(BBF_NONE_QUIRK);
 
             GenTree* fixedFptrAddress  = GetFixedFptrAddress();

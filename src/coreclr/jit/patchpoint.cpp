@@ -101,13 +101,12 @@ private:
     // Arguments:
     //    jumpKind - jump kind for the new basic block
     //    insertAfter - basic block, after which compiler has to insert the new one.
-    //    jumpDest - jump target for the new basic block. Defaults to nullptr.
     //
     // Return Value:
     //    new basic block.
-    BasicBlock* CreateAndInsertBasicBlock(BBKinds jumpKind, BasicBlock* insertAfter, BasicBlock* jumpDest = nullptr)
+    BasicBlock* CreateAndInsertBasicBlock(BBKinds jumpKind, BasicBlock* insertAfter)
     {
-        BasicBlock* block = compiler->fgNewBBafter(jumpKind, insertAfter, true, jumpDest);
+        BasicBlock* block = compiler->fgNewBBafter(jumpKind, insertAfter, true);
         block->SetFlags(BBF_IMPORTED);
         return block;
     }

@@ -1671,8 +1671,7 @@ bool Compiler::fgVNBasedIntrinsicExpansionForCall_ReadUtf8(BasicBlock** pBlock, 
     // In theory, we could just emit the const U8 data to the data section and use GT_BLK here
     // but that would be a bit less efficient since we would have to load the data from memory.
     //
-    BasicBlock* fastpathBb = fgNewBBafter(BBJ_ALWAYS, lengthCheckBb, true, lengthCheckBb->Next());
-    assert(fastpathBb->JumpsToNext());
+    BasicBlock* fastpathBb = fgNewBBafter(BBJ_ALWAYS, lengthCheckBb, true);
     fastpathBb->SetFlags(BBF_INTERNAL | BBF_NONE_QUIRK);
 
     // The widest type we can use for loads
@@ -1740,7 +1739,9 @@ bool Compiler::fgVNBasedIntrinsicExpansionForCall_ReadUtf8(BasicBlock** pBlock, 
     lengthCheckBb->SetFalseEdge(falseEdge);
     
     // fastpathBb flows into block
-    fgAddRefPred(block, fastpathBb);
+    FlowEdge* const newEdge = fgAddRefPred(block, fastpathBb);
+    fastpathBb->SetTargetEdge(newEdge);
+    assert(fastpathBb->JumpsToNext());
 
     //
     // Re-distribute weights
