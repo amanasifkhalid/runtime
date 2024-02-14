@@ -630,13 +630,18 @@ public:
         return KindIs(BBJ_ALWAYS, BBJ_CALLFINALLY, BBJ_CALLFINALLYRET, BBJ_EHCATCHRET, BBJ_EHFILTERRET, BBJ_LEAVE);
     }
 
-    BasicBlock* GetTarget() const
+    FlowEdge* GetTargetEdge() const
     {
         // Only block kinds that use `bbTargetEdge` can access it, and it must not be null.
         assert(HasInitializedTarget());
         assert(bbTargetEdge->getDestinationBlock() != nullptr);
         assert(bbTargetEdge->getSourceBlock() == this);
-        return bbTargetEdge->getDestinationBlock();
+        return bbTargetEdge;
+    }
+
+    BasicBlock* GetTarget() const
+    {
+        return GetTargetEdge()->getDestinationBlock();
     }
 
     void SetTargetEdge(FlowEdge* targetEdge)
@@ -730,12 +735,17 @@ public:
         return (bbFalseEdge->getDestinationBlock() == target);
     }
 
-    void SetCond(BasicBlock* trueTarget, BasicBlock* falseTarget)
+    void SetCond(FlowEdge* trueEdge, FlowEdge* falseEdge)
     {
-        assert(trueTarget != nullptr);
-        bbKind        = BBJ_COND;
-        bbTrueTarget  = trueTarget;
-        bbFalseTarget = falseTarget;
+        assert(trueEdge != nullptr);
+        assert(trueEdge->getDestinationBlock() != nullptr);
+        assert(trueEdge->getSourceBlock() == this);
+        assert(falseEdge != nullptr);
+        assert(falseEdge->getDestinationBlock() != nullptr);
+        assert(falseEdge->getSourceBlock() == this);
+        bbKind      = BBJ_COND;
+        bbTrueEdge  = trueEdge;
+        bbFalseEdge = falseEdge;
     }
 
     // Set both the block kind and target edge. This can clear `bbTargetEdge` when setting

@@ -956,20 +956,21 @@ GenTree* Lowering::LowerSwitch(GenTree* node)
     // representing the fall-through flow from originalSwitchBB.
     assert(originalSwitchBB->KindIs(BBJ_ALWAYS));
     assert(originalSwitchBB->NextIs(afterDefaultCondBlock));
+    assert(originalSwitchBB->JumpsToNext());
     assert(afterDefaultCondBlock->KindIs(BBJ_SWITCH));
     assert(afterDefaultCondBlock->GetSwitchTargets()->bbsHasDefault);
     assert(afterDefaultCondBlock->isEmpty()); // Nothing here yet.
 
     // The GT_SWITCH code is still in originalSwitchBB (it will be removed later).
 
-    // Turn originalSwitchBB into a BBJ_COND.
-    originalSwitchBB->SetCond(jumpTab[jumpCnt - 1], afterDefaultCondBlock);
-
     // Fix the pred for the default case: the default block target still has originalSwitchBB
     // as a predecessor, but the fgSplitBlockAfterStatement() moved all predecessors to point
     // to afterDefaultCondBlock.
-    FlowEdge* oldEdge = comp->fgRemoveRefPred(jumpTab[jumpCnt - 1], afterDefaultCondBlock);
-    comp->fgAddRefPred(jumpTab[jumpCnt - 1], originalSwitchBB, oldEdge);
+    FlowEdge* const oldEdge = comp->fgRemoveRefPred(jumpTab[jumpCnt - 1], afterDefaultCondBlock);
+    FlowEdge* const trueEdge = comp->fgAddRefPred(jumpTab[jumpCnt - 1], originalSwitchBB, oldEdge);
+
+    // Turn originalSwitchBB into a BBJ_COND.
+    originalSwitchBB->SetCond(trueEdge, originalSwitchBB->GetTargetEdge());
 
     bool useJumpSequence = jumpCnt < minSwitchTabJumpCnt;
 
@@ -1070,7 +1071,7 @@ GenTree* Lowering::LowerSwitch(GenTree* node)
             // If we haven't used the afterDefaultCondBlock yet, then use that.
             if (fUsedAfterDefaultCondBlock)
             {
-                BasicBlock* newBlock = comp->fgNewBBafter(BBJ_ALWAYS, currentBlock, true, currentBlock->Next());
+                BasicBlock* newBlock = comp->fgNewBBafter(BBJ_ALWAYS, currentBlock, true);
                 newBlock->SetFlags(BBF_NONE_QUIRK);
                 FlowEdge* const falseEdge = comp->fgAddRefPred(newBlock, currentBlock); // The fall-through predecessor.
                 currentBlock->SetFalseEdge(falseEdge);
@@ -1099,7 +1100,8 @@ GenTree* Lowering::LowerSwitch(GenTree* node)
             {
                 // Otherwise, it's a conditional branch. Set the branch kind, then add the
                 // condition statement.
-                currentBlock->SetCond(jumpTab[i], currentBlock->Next());
+                FlowEdge* const edgeToNext = comp->fgAddRefPred(currentBlock->Next(), currentBlock);
+                currentBlock->SetCond(newEdge, edgeToNext);
 
                 // Now, build the conditional statement for the current case that is
                 // being evaluated:
@@ -1121,7 +1123,8 @@ GenTree* Lowering::LowerSwitch(GenTree* node)
             // There is a fall-through to the following block. In the loop
             // above, we deleted all the predecessor edges from the switch.
             // In this case, we need to add one back.
-            comp->fgAddRefPred(currentBlock->Next(), currentBlock);
+            assert(comp->fgGetPredForBlock(currentBlock->Next(), currentBlock) != nullptr);
+            // comp->fgAddRefPred(currentBlock->Next(), currentBlock);
         }
 
         if (!fUsedAfterDefaultCondBlock)
@@ -1132,7 +1135,9 @@ GenTree* Lowering::LowerSwitch(GenTree* node)
             JITDUMP("Lowering switch " FMT_BB ": all switch cases were fall-through\n", originalSwitchBB->bbNum);
             assert(currentBlock == afterDefaultCondBlock);
             assert(currentBlock->KindIs(BBJ_SWITCH));
-            currentBlock->SetKindAndTargetEdge(BBJ_ALWAYS, currentBlock->Next());
+            assert(comp->fgGetPredForBlock(currentBlock->Next(), currentBlock) == nullptr);
+            FlowEdge* const newEdge = comp->fgAddRefPred(currentBlock->Next(), currentBlock);
+            currentBlock->SetKindAndTargetEdge(BBJ_ALWAYS, newEdge);
             currentBlock->RemoveFlags(BBF_DONT_REMOVE);
             comp->fgRemoveBlock(currentBlock, /* unreachable */ false); // It's an empty block.
         }
@@ -1306,12 +1311,15 @@ bool Lowering::TryLowerSwitchToBitTest(
     GenCondition bbSwitchCondition;
     comp->fgRemoveAllRefPreds(bbCase1, bbSwitch);
     comp->fgRemoveAllRefPreds(bbCase0, bbSwitch);
+    
+    FlowEdge* const edgeToCase0 = comp->fgAddRefPred(bbCase0, bbSwitch);
+    FlowEdge* const edgeToCase1 = comp->fgAddRefPred(bbCase1, bbSwitch);
 
     if (bbSwitch->NextIs(bbCase0))
     {
         // GenCondition::C generates JC so we jump to bbCase1 when the bit is set
         bbSwitchCondition = GenCondition::C;
-        bbSwitch->SetCond(bbCase1, bbCase0);
+        bbSwitch->SetCond(edgeToCase1, edgeToCase0);
     }
     else
     {
@@ -1319,11 +1327,8 @@ bool Lowering::TryLowerSwitchToBitTest(
 
         // GenCondition::NC generates JNC so we jump to bbCase0 when the bit is not set
         bbSwitchCondition = GenCondition::NC;
-        bbSwitch->SetCond(bbCase0, bbCase1);
+        bbSwitch->SetCond(edgeToCase0, edgeToCase1);
     }
-
-    comp->fgAddRefPred(bbCase0, bbSwitch);
-    comp->fgAddRefPred(bbCase1, bbSwitch);
 
     var_types bitTableType = (bitCount <= (genTypeSize(TYP_INT) * 8)) ? TYP_INT : TYP_LONG;
     GenTree*  bitTableIcon = comp->gtNewIconNode(bitTable, bitTableType);

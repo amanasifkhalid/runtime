@@ -14908,15 +14908,16 @@ bool Compiler::fgExpandQmarkStmt(BasicBlock* block, Statement* stmt)
 
         thenBlock = fgNewBBafter(BBJ_ALWAYS, condBlock, true, remainderBlock);
         thenBlock->SetFlags(propagateFlagsToAll);
-        condBlock->SetCond(elseBlock, thenBlock);
         if (!block->HasFlag(BBF_INTERNAL))
         {
             thenBlock->RemoveFlags(BBF_INTERNAL);
             thenBlock->SetFlags(BBF_IMPORTED);
         }
 
-        fgAddRefPred(thenBlock, condBlock);
+        FlowEdge* const condToThenEdge = fgAddRefPred(thenBlock, condBlock);
         fgAddRefPred(remainderBlock, thenBlock);
+
+        condBlock->SetCond(condToElseEdge, condToThenEdge);
 
         thenBlock->inheritWeightPercentage(condBlock, qmark->ThenNodeLikelihood());
         elseBlock->inheritWeightPercentage(condBlock, qmark->ElseNodeLikelihood());
@@ -14930,8 +14931,8 @@ bool Compiler::fgExpandQmarkStmt(BasicBlock* block, Statement* stmt)
         //              bbj_cond(true)
         //
         gtReverseCond(condExpr);
-        condBlock->SetCond(remainderBlock, elseBlock);
-        fgAddRefPred(remainderBlock, condBlock);
+        FlowEdge* const condToRemainderEdge = fgAddRefPred(remainderBlock, condBlock);
+        condBlock->SetCond(condToRemainderEdge, condToElseEdge);
         // Since we have no false expr, use the one we'd already created.
         thenBlock = elseBlock;
         elseBlock = nullptr;
@@ -14946,8 +14947,8 @@ bool Compiler::fgExpandQmarkStmt(BasicBlock* block, Statement* stmt)
         //              +-->------------+
         //              bbj_cond(true)
         //
-        condBlock->SetCond(remainderBlock, elseBlock);
-        fgAddRefPred(remainderBlock, condBlock);
+        FlowEdge* const condToRemainderEdge = fgAddRefPred(remainderBlock, condBlock);
+        condBlock->SetCond(condToRemainderEdge, condToElseEdge);
 
         elseBlock->inheritWeightPercentage(condBlock, qmark->ElseNodeLikelihood());
     }
