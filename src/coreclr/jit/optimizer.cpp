@@ -2213,8 +2213,6 @@ bool Compiler::optInvertWhileLoop(BasicBlock* block)
     // is maintained no matter which condition block we point to, but we'll lose optimization potential
     // (and create spaghetti code) if we get it wrong.
     //
-    BlockToBlockMap blockMap(getAllocator(CMK_LoopOpt));
-    bool            blockMapInitialized = false;
 
     unsigned const loopFirstNum  = bTop->bbNum;
     unsigned const loopBottomNum = bTest->bbNum;
@@ -2227,16 +2225,27 @@ bool Compiler::optInvertWhileLoop(BasicBlock* block)
             continue;
         }
 
-        if (!blockMapInitialized)
-        {
-            blockMapInitialized = true;
-            blockMap.Set(bTest, bNewCond);
-        }
-
         // Redirect the predecessor to the new block.
         JITDUMP("Redirecting non-loop " FMT_BB " -> " FMT_BB " to " FMT_BB " -> " FMT_BB "\n", predBlock->bbNum,
                 bTest->bbNum, predBlock->bbNum, bNewCond->bbNum);
-        optRedirectBlock(predBlock, &blockMap, RedirectBlockOption::UpdatePredLists);
+        
+        switch (predBlock->GetKind())
+        {
+            case BBJ_ALWAYS:
+            case BBJ_CALLFINALLY:
+            case BBJ_CALLFINALLYRET:
+            case BBJ_COND:
+            case BBJ_SWITCH:
+                fgReplaceJumpTarget(predBlock, bTest, bNewCond);
+                break;
+
+            case BBJ_EHFINALLYRET:
+                fgReplaceEhfSuccessor(predBlock, bTest, bNewCond);
+                break;
+
+            default:
+                break;
+        }
     }
 
     // If we have profile data for all blocks and we know that we are cloning the
