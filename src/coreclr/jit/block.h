@@ -617,13 +617,6 @@ public:
         return bbTargetOffs;
     }
 
-    void SetKindAndTarget(BBKinds kind, unsigned targetOffs)
-    {
-        bbKind       = kind;
-        bbTargetOffs = targetOffs;
-        assert(KindIs(BBJ_ALWAYS, BBJ_COND, BBJ_LEAVE));
-    }
-
     bool HasTarget() const
     {
         // These block types should always have bbTargetEdge set
