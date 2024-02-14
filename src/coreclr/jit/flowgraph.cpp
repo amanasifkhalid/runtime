@@ -5601,47 +5601,121 @@ void FlowGraphNaturalLoop::Duplicate(BasicBlock** insertAfter, BlockToBlockMap* 
         return BasicBlockVisit::Continue;
     });
 
-    // Now go through the new blocks, remapping their jump targets within the loop
+    // Now go through the new blocks, remapping their successors within the loop
     // and updating the preds lists.
     VisitLoopBlocks([=](BasicBlock* blk) {
         BasicBlock* newBlk = nullptr;
         bool        b      = map->Lookup(blk, &newBlk);
         assert(b && newBlk != nullptr);
 
-        // Jump target should not be set yet
+        // Successor should not be set yet
         assert(!newBlk->HasInitializedTarget());
 
-        // First copy the jump destination(s) from "blk".
-        newBlk->CopyTarget(comp, blk);
+        BasicBlock* newTarget;
 
-        // Now redirect the new block according to "blockMap".
-        comp->optRedirectBlock(newBlk, map);
-
-        // TODO: fix
-        assert(false);
-
-        // Add predecessor edges for the new successors, as well as the fall-through paths.
-        switch (newBlk->GetKind())
+        // Set the successor edges of "newBlk".
+        // For each successor, use "blockMap" to determine if the successor needs to be redirected.
+        switch (blk->GetKind())
         {
+            case BBJ_EHCATCHRET:
+            case BBJ_EHFILTERRET:
+            case BBJ_EHFINALLYRET:
+                unreached(); // TODO: correct?
+                break;
+
             case BBJ_ALWAYS:
+                // Copy BBF_NONE_QUIRK flag for BBJ_ALWAYS blocks only
+                newBlk->CopyFlags(blk, BBF_NONE_QUIRK);
+
+                FALLTHROUGH;
             case BBJ_CALLFINALLY:
             case BBJ_CALLFINALLYRET:
-                comp->fgAddRefPred(newBlk->GetTarget(), newBlk);
+            {
+                BasicBlock* currTarget = blk->GetTarget();
+                FlowEdge* const newEdge;
+
+                // Determine if newBlk should be redirected to a different target from blk's target
+                if (map->Lookup(currTarget, &newTarget))
+                {
+                    // newBlk needs to be redirected to a different target
+                    newEdge = comp->fgAddRefPred(newTarget, newBlk);
+                }
+                else
+                {
+                    // newBlk uses the same target as blk
+                    newEdge = comp->fgAddRefPred(currTarget, newBlk);
+                }
+
+                newBlk->SetKindAndTargetEdge(blk->GetKind, newEdge);
                 break;
+            }
 
             case BBJ_COND:
-                comp->fgAddRefPred(newBlk->GetFalseTarget(), newBlk);
-                comp->fgAddRefPred(newBlk->GetTrueTarget(), newBlk);
+            {
+                BasicBlock* currTrueTarget  = blk->GetTrueTarget();
+                BasicBlock* currFalseTarget = blk->GetFalseTarget();
+                FlowEdge* const trueEdge;
+                FlowEdge* const falseEdge;
+
+                // Determine if newBLk should be redirected to a different true target from blk's true target
+                if (map->Lookup(currTrueTarget, &newTarget))
+                {
+                    // newBlk needs to be redirected to a different true target
+                    trueEdge = comp->fgAddRefPred(newTarget, newBlk);
+                }
+                else
+                {
+                    // newBlk uses the same true target as blk
+                    trueEdge = comp->fgAddRefPred(currTrueTarget, newBlk);
+                }
+
+                // Do the same lookup and edge creation for the false target
+                if (map->Lookup(currFalseTarget, &newTarget))
+                {
+                    falseEdge = comp->fgAddRefPred(newTarget, newBlk);
+                }
+                else
+                {
+                    falseEdge = comp->fgAddRefPred(currFalseTarget, newBlk);
+                }
+
+                newBlk->SetCond(trueEdge, falseEdge);
                 break;
+            }
 
             case BBJ_SWITCH:
-                for (BasicBlock* const switchDest : newBlk->SwitchTargets())
+            {
+                BBswtDesc* currSwtDesc = blk->GetSwitchTargets();
+                BBswtDesc* newSwtDesc = new (comp, CMK_BasicBlock) BBswtDesc;
+                newSwtDesc->bbsCount = currSwtDesc->bbsCount;
+                FlowEdge** jumpTable = new (comp, CMK_FlowEdge) FlowEdge*[currSwtDesc->bbsCount];
+
+                for (BasicBlock* const switchTarget : blk->SwitchTargets())
                 {
-                    comp->fgAddRefPred(switchDest, newBlk);
+                    FlowEdge* const newEdge;
+
+                    // Determine if newBlk should use a different switch target from blk's switch target
+                    if (map->Lookup(switchTarget, &newTarget))
+                    {
+                        newEdge = comp->fgAddRefPred(newTarget, newBlk);
+                    }
+                    else
+                    {
+                        newEdge = comp->fgAddRefPred(switchTarget, newBlk);
+                    }
+
+                    *jumpTable = newEdge;
+                    jumpTable++;
                 }
+
+                newSwtDesc->bbsDstTab = jumpTable;
+                newBlk->SetSwitch(newSwtDesc);
                 break;
+            }
 
             default:
+                assert(blk->NumSucc() == 0);
+                newBlk->SetKindAndTargetEdge(blk->GetKind());
                 break;
         }
 

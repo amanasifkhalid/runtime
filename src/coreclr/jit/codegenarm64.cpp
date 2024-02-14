@@ -3761,7 +3761,7 @@ void CodeGen::genJumpTable(GenTree* treeNode)
 
     for (unsigned i = 0; i < jumpCount; i++)
     {
-        BasicBlock* target = jumpTable->getDestinationBlock();
+        BasicBlock* target = (*jumpTable)->getDestinationBlock();
         jumpTable++;
         noway_assert(target->HasFlag(BBF_HAS_LABEL));
 
