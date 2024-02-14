@@ -307,38 +307,40 @@ public:
     }
 };
 
-// BBArrayIterator: forward iterator for an array of BasicBlock*, such as the BBswtDesc->bbsDstTab.
-// It is an error (with assert) to yield a nullptr BasicBlock* in this array.
-// `m_bbEntry` can be nullptr, but it only makes sense if both the begin and end of an iteration range are nullptr
+// BBArrayIterator: forward iterator for an array of FlowEdge*, such as the BBswtDesc->bbsDstTab.
+// It is an error (with assert) to yield a nullptr FlowEdge* in this array.
+// `m_entryEdge` can be nullptr, but it only makes sense if both the begin and end of an iteration range are nullptr
 // (meaning, no actual iteration will happen).
+// Yields the destination block of each edge iterated.
 //
 class BBArrayIterator
 {
-    BasicBlock* const* m_bbEntry;
+    FlowEdge* const* m_entryEdge;
 
 public:
-    BBArrayIterator(BasicBlock* const* bbEntry) : m_bbEntry(bbEntry)
+    BBArrayIterator(FlowEdge* const* entryEdge) : m_entryEdge(entryEdge)
     {
     }
 
     BasicBlock* operator*() const
     {
-        assert(m_bbEntry != nullptr);
-        BasicBlock* bTarget = *m_bbEntry;
-        assert(bTarget != nullptr);
-        return bTarget;
+        assert(m_entryEdge != nullptr);
+        FlowEdge* nextEdge = *m_entryEdge;
+        assert(nextEdge != nullptr);
+        assert(nextEdge->getDestinationBlock() != nullptr);
+        return nextEdge->getDestinationBlock();
     }
 
     BBArrayIterator& operator++()
     {
-        assert(m_bbEntry != nullptr);
-        ++m_bbEntry;
+        assert(m_entryEdge != nullptr);
+        ++m_entryEdge;
         return *this;
     }
 
     bool operator!=(const BBArrayIterator& i) const
     {
-        return m_bbEntry != i.m_bbEntry;
+        return m_entryEdge != i.m_entryEdge;
     }
 };
 
@@ -810,19 +812,13 @@ public:
         bbEhfTargets = ehfTarget;
     }
 
-    // BBJ_CALLFINALLYRET uses the `bbTarget` field. However, also treat it specially:
+    // BBJ_CALLFINALLYRET uses the `bbTargetEdge` field. However, also treat it specially:
     // for callers that know they want a continuation, use this function instead of the
     // general `GetTarget()` to allow asserting on the block kind.
     BasicBlock* GetFinallyContinuation() const
     {
         assert(KindIs(BBJ_CALLFINALLYRET));
-        return bbTarget;
-    }
-
-    void SetFinallyContinuation(BasicBlock* finallyContinuation)
-    {
-        assert(KindIs(BBJ_CALLFINALLYRET));
-        bbTarget = finallyContinuation;
+        return GetTarget();
     }
 
 #ifdef DEBUG
@@ -831,21 +827,21 @@ public:
     BasicBlock* GetTargetRaw() const
     {
         assert(HasTarget());
-        return bbTarget;
+        return (bbTargetEdge == nullptr ? nullptr : bbTargetEdge->getDestinationBlock());
     }
 
     // Return the BBJ_COND true target; it might be null. Only used during dumping.
     BasicBlock* GetTrueTargetRaw() const
     {
         assert(KindIs(BBJ_COND));
-        return bbTrueTarget;
+        return (bbTrueEdge == nullptr ? nullptr : bbTrueEdge->getDestinationBlock());
     }
 
     // Return the BBJ_COND false target; it might be null. Only used during dumping.
     BasicBlock* GetFalseTargetRaw() const
     {
         assert(KindIs(BBJ_COND));
-        return bbFalseTarget;
+        return (bbFalseEdge == nullptr ? nullptr : bbFalseEdge->getDestinationBlock());
     }
 
 #endif // DEBUG
@@ -1624,9 +1620,9 @@ public:
         // need to call a function or execute another `switch` to get them. Also, pre-compute the begin and end
         // points of the iteration, for use by BBArrayIterator. `m_begin` and `m_end` will either point at
         // `m_succs` or at the switch table successor array.
-        BasicBlock*        m_succs[2];
-        BasicBlock* const* m_begin;
-        BasicBlock* const* m_end;
+        FlowEdge*        m_succs[2];
+        FlowEdge* const* m_begin;
+        FlowEdge* const* m_end;
 
     public:
         BBSuccList(const BasicBlock* block);
@@ -1984,24 +1980,24 @@ inline BasicBlock::BBSuccList::BBSuccList(const BasicBlock* block)
         case BBJ_EHCATCHRET:
         case BBJ_EHFILTERRET:
         case BBJ_LEAVE:
-            m_succs[0] = block->bbTarget;
+            m_succs[0] = block->GetTargetEdge();
             m_begin    = &m_succs[0];
             m_end      = &m_succs[1];
             break;
 
         case BBJ_COND:
-            m_succs[0] = block->bbFalseTarget;
+            m_succs[0] = block->GetFalseEdge();
             m_begin    = &m_succs[0];
 
             // If both fall-through and branch successors are identical, then only include
             // them once in the iteration (this is the same behavior as NumSucc()/GetSucc()).
-            if (block->TrueTargetIs(block->GetFalseTarget()))
+            if (block->TrueEdgeIs(block->GetFalseEdge()))
             {
                 m_end = &m_succs[1];
             }
             else
             {
-                m_succs[1] = block->bbTrueTarget;
+                m_succs[1] = block->GetFalseEdge();
                 m_end      = &m_succs[2];
             }
             break;

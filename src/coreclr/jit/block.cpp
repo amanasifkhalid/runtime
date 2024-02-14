@@ -1185,12 +1185,14 @@ unsigned BasicBlock::NumSucc() const
             return 1;
 
         case BBJ_COND:
-            if (bbTrueTarget == bbFalseTarget)
+            if (TrueEdgeIs(GetFalseEdge()))
             {
+                assert(TrueTargetIs(GetFalseTarget()));
                 return 1;
             }
             else
             {
+                assert(!TrueTargetIs(GetFalseTarget()));
                 return 2;
             }
 
@@ -1239,18 +1241,21 @@ BasicBlock* BasicBlock::GetSucc(unsigned i) const
         case BBJ_EHCATCHRET:
         case BBJ_EHFILTERRET:
         case BBJ_LEAVE:
-            return bbTarget;
+            return GetTarget();
 
         case BBJ_COND:
             if (i == 0)
             {
-                return bbFalseTarget;
+                assert(TrueEdgeIs(GetFalseEdge()));
+                assert(TrueTargetIs(GetFalseTarget()));
+                return GetFalseTarget();
             }
             else
             {
                 assert(i == 1);
-                assert(bbFalseTarget != bbTrueTarget);
-                return bbTrueTarget;
+                assert(!TrueEdgeIs(GetFalseEdge()));
+                assert(!TrueTargetIs(GetFalseTarget()));
+                return GetTrueTarget();
             }
 
         case BBJ_EHFINALLYRET:
@@ -1310,12 +1315,14 @@ unsigned BasicBlock::NumSucc(Compiler* comp)
             return 1;
 
         case BBJ_COND:
-            if (bbTrueTarget == bbFalseTarget)
+            if (TrueEdgeIs(GetFalseEdge()))
             {
+                assert(TrueTargetIs(GetFalseTarget()));
                 return 1;
             }
             else
             {
+                assert(!TrueTargetIs(GetFalseTarget()));
                 return 2;
             }
 
@@ -1349,8 +1356,8 @@ BasicBlock* BasicBlock::GetSucc(unsigned i, Compiler* comp)
     {
         case BBJ_EHFILTERRET:
             // Handler is the (sole) normal successor of the filter.
-            assert(comp->fgFirstBlockOfHandler(this) == bbTarget);
-            return bbTarget;
+            assert(comp->fgFirstBlockOfHandler(this) == GetTarget());
+            return GetTarget();
 
         case BBJ_EHFINALLYRET:
             assert(bbEhfTargets != nullptr);
@@ -1362,18 +1369,21 @@ BasicBlock* BasicBlock::GetSucc(unsigned i, Compiler* comp)
         case BBJ_ALWAYS:
         case BBJ_EHCATCHRET:
         case BBJ_LEAVE:
-            return bbTarget;
+            return GetTarget();
 
         case BBJ_COND:
             if (i == 0)
             {
-                return bbFalseTarget;
+                assert(TrueEdgeIs(GetFalseEdge()));
+                assert(TrueTargetIs(GetFalseTarget()));
+                return GetFalseTarget();
             }
             else
             {
                 assert(i == 1);
-                assert(bbFalseTarget != bbTrueTarget);
-                return bbTrueTarget;
+                assert(!TrueEdgeIs(GetFalseEdge()));
+                assert(!TrueTargetIs(GetFalseTarget()));
+                return GetTrueTarget();
             }
 
         case BBJ_SWITCH:
