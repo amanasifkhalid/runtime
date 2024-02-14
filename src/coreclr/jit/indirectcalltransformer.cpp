@@ -1177,8 +1177,8 @@ private:
             // not fall through to the check block.
             //
             FlowEdge* const oldEdge = compiler->fgRemoveRefPred(checkBlock, coldBlock);
-            coldBlock->SetKindAndTarget(BBJ_ALWAYS, elseBlock);
-            compiler->fgAddRefPred(elseBlock, coldBlock, oldEdge);
+            FlowEdge* const newEdge = compiler->fgAddRefPred(elseBlock, coldBlock, oldEdge);
+            coldBlock->SetKindAndTargetEdge(BBJ_ALWAYS, newEdge);
         }
 
         // When the current candidate hads sufficiently high likelihood, scan

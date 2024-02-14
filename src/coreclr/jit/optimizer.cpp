@@ -1712,8 +1712,8 @@ void Compiler::optRedirectPrevUnrollIteration(FlowGraphNaturalLoop* loop, BasicB
         fgRemoveRefPred(prevTestBlock->GetFalseTarget(), prevTestBlock);
 
         // Redirect exit edge from previous iteration to new entry.
-        prevTestBlock->SetKindAndTarget(BBJ_ALWAYS, target);
-        fgAddRefPred(target, prevTestBlock);
+        FlowEdge* const newEdge = fgAddRefPred(target, prevTestBlock);
+        prevTestBlock->SetKindAndTargetEdge(BBJ_ALWAYS, newEdge);
 
         JITDUMP("Redirecting previously created exiting " FMT_BB " -> " FMT_BB "\n", prevTestBlock->bbNum,
                 target->bbNum);
@@ -2135,9 +2135,6 @@ bool Compiler::optInvertWhileLoop(BasicBlock* block)
 
     // Create a new block after `block` to put the copied condition code.
     BasicBlock* bNewCond = fgNewBBafter(BBJ_COND, block, /*extendRegion*/ true, bJoin);
-    block->SetKindAndTarget(BBJ_ALWAYS, bNewCond);
-    block->SetFlags(BBF_NONE_QUIRK);
-    assert(block->JumpsToNext());
 
     // Clone each statement in bTest and append to bNewCond.
     for (Statement* const stmt : bTest->Statements())
@@ -2200,8 +2197,11 @@ bool Compiler::optInvertWhileLoop(BasicBlock* block)
     fgAddRefPred(bJoin, bNewCond);
     fgAddRefPred(bTop, bNewCond);
 
-    fgAddRefPred(bNewCond, block);
     fgRemoveRefPred(bTest, block);
+    FlowEdge* const newEdge = fgAddRefPred(bNewCond, block);
+    block->SetKindAndTargetEdge(BBJ_ALWAYS, newEdge);
+    block->SetFlags(BBF_NONE_QUIRK);
+    assert(block->JumpsToNext());
 
     // Move all predecessor edges that look like loop entry edges to point to the new cloned condition
     // block, not the existing condition block. The idea is that if we only move `block` to point to

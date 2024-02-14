@@ -2401,7 +2401,7 @@ bool Compiler::fgLateCastExpansionForCall(BasicBlock** pBlock, Statement* stmt, 
     if ((call->gtCallMoreFlags & GTF_CALL_M_CAST_OBJ_NONNULL) != 0)
     {
         fgRemoveStmt(nullcheckBb, nullcheckBb->lastStmt());
-        nullcheckBb->SetKindAndTarget(BBJ_ALWAYS, typeChecksBbs[0]);
+        nullcheckBb->SetKindAndTargetEdge(BBJ_ALWAYS, nullcheckBb->GetFalseEdge());
         fgRemoveRefPred(lastBb, nullcheckBb);
     }
 

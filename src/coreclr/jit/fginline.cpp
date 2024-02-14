@@ -676,7 +676,7 @@ private:
                 if (condTree->IsIntegralConst(0))
                 {
                     m_compiler->fgRemoveRefPred(block->GetTrueTarget(), block);
-                    block->SetKindAndTarget(BBJ_ALWAYS, block->Next());
+                    block->SetKindAndTargetEdge(BBJ_ALWAYS, block->GetFalseTarget());
                     block->SetFlags(BBF_NONE_QUIRK);
                 }
                 else
@@ -1533,9 +1533,9 @@ void Compiler::fgInsertInlineeBlocks(InlineInfo* pInlineInfo)
                 JITDUMP("\nConvert bbKind of " FMT_BB " to BBJ_ALWAYS to bottomBlock " FMT_BB "\n", block->bbNum,
                         bottomBlock->bbNum);
 
-                block->SetKindAndTarget(BBJ_ALWAYS, bottomBlock);
                 FlowEdge* const newEdge = fgAddRefPred(bottomBlock, block);
                 newEdge->setLikelihood(1.0);
+                block->SetKindAndTargetEdge(BBJ_ALWAYS, newEdge);
 
                 if (block == InlineeCompiler->fgLastBB)
                 {

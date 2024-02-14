@@ -2494,7 +2494,7 @@ GenTree* Compiler::impTypeIsAssignable(GenTree* typeTo, GenTree* typeFrom)
 
 void Compiler::verConvertBBToThrowVerificationException(BasicBlock* block DEBUGARG(bool logMsg))
 {
-    block->SetKindAndTarget(BBJ_THROW);
+    block->SetKindAndTargetEdge(BBJ_THROW);
     block->SetFlags(BBF_FAILED_VERIFICATION);
     block->RemoveFlags(BBF_IMPORTED);
 
@@ -4408,7 +4408,7 @@ void Compiler::impImportLeave(BasicBlock* block)
                 fgRemoveRefPred(callBlock->GetTarget(), callBlock);
 
                 // callBlock will call the finally handler. Convert the BBJ_LEAVE to BBJ_CALLFINALLY.
-                callBlock->SetKindAndTarget(BBJ_CALLFINALLY, HBtab->ebdHndBeg);
+                callBlock->SetKindAndTargetEdge(BBJ_CALLFINALLY, HBtab->ebdHndBeg);
 
                 if (endCatches)
                 {
@@ -4738,9 +4738,9 @@ void Compiler::impImportLeave(BasicBlock* block)
                 // which might be in the middle of the "try". In most cases, the BBJ_ALWAYS will jump to the
                 // next block, and flow optimizations will remove it.
                 fgRemoveRefPred(block->GetTarget(), block);
-                block->SetKindAndTarget(BBJ_ALWAYS, callBlock);
                 FlowEdge* const newEdge = fgAddRefPred(callBlock, block);
                 newEdge->setLikelihood(1.0);
+                block->SetKindAndTargetEdge(BBJ_ALWAYS, newEdge);
 
                 // The new block will inherit this block's weight.
                 callBlock->inheritWeight(block);
@@ -4763,7 +4763,7 @@ void Compiler::impImportLeave(BasicBlock* block)
                 fgRemoveRefPred(callBlock->GetTarget(), callBlock);
 
                 // callBlock will call the finally handler. Convert the BBJ_LEAVE to BBJ_CALLFINALLY
-                callBlock->SetKindAndTarget(BBJ_CALLFINALLY, HBtab->ebdHndBeg);
+                callBlock->SetKindAndTargetEdge(BBJ_CALLFINALLY, HBtab->ebdHndBeg);
 
 #ifdef DEBUG
                 if (verbose)
@@ -5108,9 +5108,9 @@ void Compiler::impResetLeaveBlock(BasicBlock* block, unsigned jmpAddr)
     fgInitBBLookup();
 
     fgRemoveRefPred(block->GetTarget(), block);
-    block->SetKindAndTarget(BBJ_LEAVE, fgLookupBB(jmpAddr));
-    FlowEdge* const newEdge = fgAddRefPred(block->GetTarget(), block);
+    FlowEdge* const newEdge = fgAddRefPred(fgLookupBB(jmpAddr), block);
     newEdge->setLikelihood(1.0);
+    block->SetKindAndTargetEdge(BBJ_LEAVE, newEdge);
 
     // We will leave the BBJ_ALWAYS block we introduced. When it's reimported
     // the BBJ_ALWAYS block will be unreachable, and will be removed after. The
@@ -6011,7 +6011,7 @@ void Compiler::impImportBlockCode(BasicBlock* block)
 
             // Change block to BBJ_THROW so we won't trigger importation of successors.
             //
-            block->SetKindAndTarget(BBJ_THROW);
+            block->SetKindAndTargetEdge(BBJ_THROW);
 
             // If this method has a explicit generic context, the only uses of it may be in
             // the IL for this block. So assume it's used.
@@ -7413,9 +7413,9 @@ void Compiler::impImportBlockCode(BasicBlock* block)
                         {
                             // TODO-NoFallThrough: Update once bbFalseTarget can diverge from bbNext
                             assert(block->NextIs(block->GetFalseTarget()));
-                            JITDUMP("\nThe block jumps to the next " FMT_BB "\n", block->Next()->bbNum);
+                            JITDUMP("\nThe block jumps to the next " FMT_BB "\n", block->GetFalseTarget()->bbNum);
                             fgRemoveRefPred(block->GetTrueTarget(), block);
-                            block->SetKindAndTarget(BBJ_ALWAYS, block->Next());
+                            block->SetKindAndTargetEdge(BBJ_ALWAYS, block->GetFalseEdge());
 
                             // TODO-NoFallThrough: Once bbFalseTarget can diverge from bbNext, it may not make sense
                             // to set BBF_NONE_QUIRK
@@ -7681,7 +7681,7 @@ void Compiler::impImportBlockCode(BasicBlock* block)
                         if ((val == switchVal) || (!foundVal && (val == jumpCnt - 1)))
                         {
                             // transform the basic block into a BBJ_ALWAYS
-                            block->SetKindAndTarget(BBJ_ALWAYS, curJump);
+                            block->SetKindAndTargetEdge(BBJ_ALWAYS, curJump);
                             foundVal = true;
                         }
                         else

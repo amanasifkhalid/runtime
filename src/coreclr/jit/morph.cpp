@@ -6316,7 +6316,7 @@ GenTree* Compiler::fgMorphPotentialTailCall(GenTreeCall* call)
         {
             // We call CORINFO_HELP_TAILCALL which does not return, so we will
             // not need epilogue.
-            compCurBB->SetKindAndTarget(BBJ_THROW);
+            compCurBB->SetKindAndTargetEdge(BBJ_THROW);
         }
 
         if (isRootReplaced)
@@ -7459,11 +7459,13 @@ void Compiler::fgMorphRecursiveFastTailCallIntoLoop(BasicBlock* block, GenTreeCa
     fgRemoveStmt(block, lastStmt);
 
     // Set the loop edge.
+    BasicBlock* targetBlock;
+
     if (opts.IsOSR())
     {
         // Todo: this may not look like a viable loop header.
         // Might need the moral equivalent of a scratch BB.
-        block->SetKindAndTarget(BBJ_ALWAYS, fgEntryBB);
+        targetBlock = fgEntryBB;
     }
     else
     {
@@ -7478,11 +7480,12 @@ void Compiler::fgMorphRecursiveFastTailCallIntoLoop(BasicBlock* block, GenTreeCa
         // block removal on it.
         //
         fgFirstBB->SetFlags(BBF_DONT_REMOVE);
-        block->SetKindAndTarget(BBJ_ALWAYS, fgFirstBB->Next());
+        targetBlock = fgFirstBB->Next();
     }
 
     // Finish hooking things up.
-    fgAddRefPred(block->GetTarget(), block);
+    FlowEdge* const newEdge = fgAddRefPred(targetBlock, block);
+    block->SetKindAndTargetEdge(BBJ_ALWAYS, newEdge);
     block->RemoveFlags(BBF_HAS_JMP);
 }
 
@@ -13219,7 +13222,7 @@ Compiler::FoldResult Compiler::fgFoldConditional(BasicBlock* block)
                 // JTRUE 0 - transform the basic block into a BBJ_ALWAYS
                 bTaken    = block->GetFalseTarget();
                 bNotTaken = block->GetTrueTarget();
-                block->SetKindAndTarget(BBJ_ALWAYS, bTaken);
+                block->SetKindAndTargetEdge(BBJ_ALWAYS, block->GetFalseEdge());
                 block->SetFlags(BBF_NONE_QUIRK);
             }
 
@@ -13387,7 +13390,7 @@ Compiler::FoldResult Compiler::fgFoldConditional(BasicBlock* block)
 
                 if ((val == switchVal) || (!foundVal && (val == jumpCnt - 1)))
                 {
-                    block->SetKindAndTarget(BBJ_ALWAYS, curJump);
+                    block->SetKindAndTargetEdge(BBJ_ALWAYS, curJump);
                     foundVal = true;
                 }
                 else
@@ -14143,8 +14146,8 @@ void Compiler::fgMergeBlockReturn(BasicBlock* block)
         else
 #endif // !TARGET_X86
         {
-            block->SetKindAndTarget(BBJ_ALWAYS, genReturnBB);
-            fgAddRefPred(genReturnBB, block);
+            FlowEdge* const newEdge = fgAddRefPred(genReturnBB, block);
+            block->SetKindAndTargetEdge(BBJ_ALWAYS, newEdge);
             fgReturnCount--;
         }
 
