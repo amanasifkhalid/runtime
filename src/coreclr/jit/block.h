@@ -520,15 +520,14 @@ private:
     /* The following union describes the jump target(s) of this block */
     union {
         unsigned    bbTargetOffs; // PC offset (temporary only)
-        BasicBlock* bbTarget;
         FlowEdge*   bbTargetEdge; // edge to target block
-        BasicBlock* bbTrueTarget; // BBJ_COND jump target when its condition is true (alias for bbTarget)
+        FlowEdge*   bbTrueEdge;   // BBJ_COND jump target edge when its condition is true (alias for bbTargetEdge)
         BBswtDesc*  bbSwtTargets; // switch descriptor
         BBehfDesc*  bbEhfTargets; // BBJ_EHFINALLYRET descriptor
     };
 
-    // Points to the successor of a BBJ_COND block if bbTrueTarget is not taken
-    BasicBlock* bbFalseTarget;
+    // Edge to the successor of a BBJ_COND block if bbTrueEdge is not taken
+    FlowEdge* bbFalseEdge;
 
 public:
     static BasicBlock* New(Compiler* compiler);
@@ -635,6 +634,8 @@ public:
     {
         // Only block kinds that use `bbTargetEdge` can access it, and it must not be null.
         assert(HasInitializedTarget());
+        assert(bbTargetEdge->getDestinationBlock() != nullptr);
+        assert(bbTargetEdge->getSourceBlock() == this);
         return bbTargetEdge->getDestinationBlock();
     }
 
@@ -647,46 +648,86 @@ public:
         assert(bbTargetEdge->getSourceBlock() == this);
     }
 
+    FlowEdge* GetTrueEdge() const
+    {
+        assert(KindIs(BBJ_COND));
+        assert(bbTrueEdge != nullptr);
+        assert(bbTrueEdge->getDestinationBlock() != nullptr);
+        assert(bbTrueEdge->getSourceBlock() == this);
+        return bbTrueEdge;
+    }
+    
     BasicBlock* GetTrueTarget() const
     {
-        assert(KindIs(BBJ_COND));
-        assert(bbTrueTarget != nullptr);
-        return bbTrueTarget;
+        return GetTrueEdge()->getDestinationBlock();
     }
 
-    void SetTrueTarget(BasicBlock* target)
+    void SetTrueEdge(FlowEdge* trueEdge)
     {
         assert(KindIs(BBJ_COND));
-        assert(target != nullptr);
-        bbTrueTarget = target;
+        assert(trueEdge != nullptr);
+        assert(trueEdge->getDestinationBlock() != nullptr);
+        assert(trueEdge->getSourceBlock() == this);
+        bbTrueEdge = trueEdge;
+    }
+
+    bool TrueEdgeIs(const FlowEdge* targetEdge) const
+    {
+        assert(KindIs(BBJ_COND));
+        assert(bbTrueEdge != nullptr);
+        assert(bbTrueEdge->getDestinationBlock() != nullptr);
+        assert(bbTrueEdge->getSourceBlock() == this);
+        return (bbTrueEdge == targetEdge);
     }
 
     bool TrueTargetIs(const BasicBlock* target) const
     {
         assert(KindIs(BBJ_COND));
-        assert(bbTrueTarget != nullptr);
-        return (bbTrueTarget == target);
+        assert(bbTrueEdge != nullptr);
+        assert(bbTrueEdge->getDestinationBlock() != nullptr);
+        assert(bbTrueEdge->getSourceBlock() == this);
+        return (bbTrueEdge->getDestinationBlock() == target);
+    }
+
+    FlowEdge* GetFalseEdge() const
+    {
+        assert(KindIs(BBJ_COND));
+        assert(bbFalseEdge != nullptr);
+        assert(bbFalseEdge->getDestinationBlock() != nullptr);
+        assert(bbFalseEdge->getSourceBlock() == this);
+        return bbFalseEdge;
     }
 
     BasicBlock* GetFalseTarget() const
     {
-        assert(KindIs(BBJ_COND));
-        assert(bbFalseTarget != nullptr);
-        return bbFalseTarget;
+        return GetFalseEdge()->getDestinationBlock();
     }
 
-    void SetFalseTarget(BasicBlock* target)
+    void SetFalseEdge(FlowEdge* falseEdge)
     {
         assert(KindIs(BBJ_COND));
-        assert(target != nullptr);
-        bbFalseTarget = target;
+        assert(falseEdge != nullptr);
+        assert(falseEdge->getDestinationBlock() != nullptr);
+        assert(falseEdge->getSourceBlock() == this);
+        bbFalseEdge = falseEdge;
+    }
+
+    bool FalseEdgeIs(const FlowEdge* targetEdge) const
+    {
+        assert(KindIs(BBJ_COND));
+        assert(bbFalseEdge != nullptr);
+        assert(bbFalseEdge->getDestinationBlock() != nullptr);
+        assert(bbFalseEdge->getSourceBlock() == this);
+        return (bbFalseEdge == targetEdge);
     }
 
     bool FalseTargetIs(const BasicBlock* target) const
     {
         assert(KindIs(BBJ_COND));
-        assert(bbFalseTarget != nullptr);
-        return (bbFalseTarget == target);
+        assert(bbFalseEdge != nullptr);
+        assert(bbFalseEdge->getDestinationBlock() != nullptr);
+        assert(bbFalseEdge->getSourceBlock() == this);
+        return (bbFalseEdge->getDestinationBlock() == target);
     }
 
     void SetCond(BasicBlock* trueTarget, BasicBlock* falseTarget)

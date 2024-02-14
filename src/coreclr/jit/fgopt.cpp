@@ -1570,12 +1570,12 @@ bool Compiler::fgOptimizeBranchToEmptyUnconditional(BasicBlock* block, BasicBloc
                 if (block->TrueTargetIs(bDest))
                 {
                     assert(!block->FalseTargetIs(bDest));
-                    block->SetTrueTarget(bDest->GetTarget());
+                    block->SetTrueEdge(newEdge);
                 }
                 else
                 {
                     assert(block->FalseTargetIs(bDest));
-                    block->SetFalseTarget(bDest->GetTarget());
+                    block->SetFalseEdge(newEdge);
                 }
                 break;
 
@@ -3515,11 +3515,11 @@ bool Compiler::fgReorderBlocks(bool useProfile)
                     assert(test->OperIsConditionalJump());
                     test->AsOp()->gtOp1 = gtReverseCond(test->AsOp()->gtOp1);
 
-                    BasicBlock* newFalseTarget = block->GetTrueTarget();
-                    BasicBlock* newTrueTarget  = block->GetFalseTarget();
-                    block->SetTrueTarget(newTrueTarget);
-                    block->SetFalseTarget(newFalseTarget);
-                    assert(block->CanRemoveJumpToTarget(newFalseTarget, this));
+                    FlowEdge* newFalseEdge = block->GetTrueEdge();
+                    FlowEdge* newTrueEdge  = block->GetFalseEdge();
+                    block->SetTrueEdge(newTrueEdge);
+                    block->SetFalseEdge(newFalseEdge);
+                    assert(block->CanRemoveJumpToTarget(newFalseEdge->getDestinationBlock(), this));
                 }
                 else
                 {
@@ -4576,10 +4576,10 @@ bool Compiler::fgReorderBlocks(bool useProfile)
             noway_assert(condTest->gtOper == GT_JTRUE);
             condTest->AsOp()->gtOp1 = gtReverseCond(condTest->AsOp()->gtOp1);
 
-            BasicBlock* trueTarget  = bPrev->GetTrueTarget();
-            BasicBlock* falseTarget = bPrev->GetFalseTarget();
-            bPrev->SetTrueTarget(falseTarget);
-            bPrev->SetFalseTarget(trueTarget);
+            FlowEdge* trueEdge  = bPrev->GetTrueEdge();
+            FlowEdge* falseEdge = bPrev->GetFalseEdge();
+            bPrev->SetTrueEdge(falseEdge);
+            bPrev->SetFalseEdge(trueEdge);
 
             // may need to rethread
             //
@@ -4982,13 +4982,12 @@ bool Compiler::fgUpdateFlowGraph(bool doTailDuplication /* = false */, bool isPh
                             if (bDest->KindIs(BBJ_COND) && !bDest->NextIs(bDest->GetFalseTarget()))
                             {
                                 BasicBlock* const bDestFalseTarget = bDest->GetFalseTarget();
-                                BasicBlock* const bFixup = fgNewBBafter(BBJ_ALWAYS, bDest, true, bDestFalseTarget);
-                                bDest->SetFalseTarget(bFixup);
+                                BasicBlock* const bFixup = fgNewBBafter(BBJ_ALWAYS, bDest, true);
                                 bFixup->inheritWeight(bDestFalseTarget);
 
                                 fgRemoveRefPred(bDestFalseTarget, bDest);
-                                fgAddRefPred(bFixup, bDest);
-                                fgAddRefPred(bDestFalseTarget, bFixup);
+                                bDest->SetFalseEdge(fgAddRefPred(bFixup, bDest));
+                                bFixup->SetTargetEdge(fgAddRefPred(bDestFalseTarget, bFixup));
                             }
                         }
                     }
@@ -5016,10 +5015,11 @@ bool Compiler::fgUpdateFlowGraph(bool doTailDuplication /* = false */, bool isPh
                         }
 
                         // Optimize the Conditional JUMP to go to the new target
-                        block->SetTrueTarget(bNext->GetTarget());
-                        block->SetFalseTarget(bNext->Next());
+                        FlowEdge* const newEdge = fgAddRefPred(bNext->GetTarget(), block, fgRemoveRefPred(bNext->GetTarget(), bNext));
+                        block->SetTrueEdge(newEdge);
 
-                        fgAddRefPred(bNext->GetTarget(), block, fgRemoveRefPred(bNext->GetTarget(), bNext));
+                        // TODO: Fix false edge
+                        // block->SetFalseEdge(bNext->Next());
 
                         /*
                           Unlink bNext from the BasicBlock list; note that we can

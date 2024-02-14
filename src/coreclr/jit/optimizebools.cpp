@@ -749,9 +749,9 @@ bool OptBoolsDsc::optOptimizeRangeTests()
 
     // We're interested in just two shapes for e.g. "X > 10 && X < 100" range test:
     //
-    BasicBlock* notInRangeBb = m_b1->GetTrueTarget();
-    BasicBlock* inRangeBb;
-    if (m_b2->TrueTargetIs(notInRangeBb))
+    FlowEdge* notInRangeEdge = m_b1->GetTrueEdge();
+    FlowEdge* inRangeEdge;
+    if (m_b2->TrueEdgeIs(notInRangeEdge))
     {
         // Shape 1: both conditions jump to NotInRange
         //
@@ -763,9 +763,9 @@ bool OptBoolsDsc::optOptimizeRangeTests()
         //
         // InRange:
         // ...
-        inRangeBb = m_b2->GetFalseTarget();
+        inRangeEdge = m_b2->GetFalseEdge();
     }
-    else if (m_b2->FalseTargetIs(notInRangeBb))
+    else if (m_b2->FalseEdgeIs(notInRangeEdge))
     {
         // Shape 2: 2nd block jumps to InRange
         //
@@ -777,7 +777,7 @@ bool OptBoolsDsc::optOptimizeRangeTests()
         //
         // NotInRange:
         // ...
-        inRangeBb = m_b2->GetTrueTarget();
+        inRangeEdge = m_b2->GetTrueEdge();
     }
     else
     {
@@ -800,23 +800,24 @@ bool OptBoolsDsc::optOptimizeRangeTests()
     const bool cmp1IsReversed = true;
 
     // cmp2 can be either reversed or not
-    const bool cmp2IsReversed = m_b2->TrueTargetIs(notInRangeBb);
+    const bool cmp2IsReversed = m_b2->TrueEdgeIs(notInRangeEdge);
 
     if (!FoldRangeTests(m_comp, cmp1, cmp1IsReversed, cmp2, cmp2IsReversed))
     {
         return false;
     }
 
-    // Re-direct firstBlock to jump to inRangeBb
-    m_comp->fgAddRefPred(inRangeBb, m_b1);
+    // Re-direct firstBlock to jump to inRangeEdge destination block
+    FlowEdge* const newEdge = m_comp->fgAddRefPred(inRangeEdge->getDestinationBlock(), m_b1);
     if (!cmp2IsReversed)
     {
-        m_b1->SetTrueTarget(inRangeBb);
-        m_b1->SetFalseTarget(notInRangeBb);
+        m_b1->SetTrueEdge(newEdge);
+        m_b1->SetFalseEdge(notInRangeEdge);
     }
     else
     {
-        m_b1->SetFalseTarget(inRangeBb);
+        m_b1->SetFalseEdge(newEdge);
+        assert(m_b1->TrueEdgeIs(notInRangeEdge));
     }
 
     // Remove the 2nd condition block as we no longer need it
@@ -1266,22 +1267,22 @@ void OptBoolsDsc::optOptimizeBoolsUpdateTrees()
     {
         // Update edges if m_b1: BBJ_COND and m_b2: BBJ_COND
 
-        FlowEdge* edge1 = m_comp->fgGetPredForBlock(m_b1->GetTrueTarget(), m_b1);
+        FlowEdge* edge1 = m_b1->GetTrueEdge();
         FlowEdge* edge2;
 
         if (m_sameTarget)
         {
-            edge2 = m_comp->fgGetPredForBlock(m_b2->GetTrueTarget(), m_b2);
+            edge2 = m_b2->GetTrueEdge();
         }
         else
         {
-            edge2 = m_comp->fgGetPredForBlock(m_b2->GetFalseTarget(), m_b2);
+            edge2 = m_b2->GetFalseEdge();
 
             m_comp->fgRemoveRefPred(m_b1->GetTrueTarget(), m_b1);
 
-            m_b1->SetTrueTarget(m_b2->GetTrueTarget());
-
-            m_comp->fgAddRefPred(m_b2->GetTrueTarget(), m_b1);
+            FlowEdge* const newEdge = m_comp->fgAddRefPred(m_b2->GetTrueTarget(), m_b1);
+            
+            m_b1->SetTrueEdge(newEdge);
         }
 
         assert(edge1 != nullptr);
@@ -1326,7 +1327,7 @@ void OptBoolsDsc::optOptimizeBoolsUpdateTrees()
         // Remove  pred 'm_b2' for 'm_b2->bbTrueTarget'
         m_comp->fgReplacePred(m_b2->GetFalseTarget(), m_b2, m_b1);
         m_comp->fgRemoveRefPred(m_b2->GetTrueTarget(), m_b2);
-        m_b1->SetFalseTarget(m_b2->GetFalseTarget());
+        m_b1->SetFalseEdge(m_b2->GetFalseEdge());
     }
 
     // Get rid of the second block

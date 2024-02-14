@@ -14659,10 +14659,12 @@ bool Compiler::fgExpandQmarkForCastInstOf(BasicBlock* block, Statement* stmt)
     fgAddRefPred(cond1Block, asgBlock);
     fgAddRefPred(remainderBlock, helperBlock);
 
-    cond1Block->SetFalseTarget(cond2Block);
-    cond2Block->SetFalseTarget(helperBlock);
-    fgAddRefPred(cond2Block, cond1Block);
-    fgAddRefPred(helperBlock, cond2Block);
+    FlowEdge* const toCond2Edge = fgAddRefPred(cond2Block, cond1Block);
+    cond1Block->SetFalseEdge(toCond2Edge);
+
+    FlowEdge* const toHelperEdge = fgAddRefPred(helperBlock, cond2Block);
+    cond2Block->SetFalseEdge(toHelperEdge);
+    
     fgAddRefPred(remainderBlock, cond1Block);
     fgAddRefPred(remainderBlock, cond2Block);
 

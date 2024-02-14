@@ -325,15 +325,9 @@ bool Compiler::fgExpandRuntimeLookupsForCall(BasicBlock** pBlock, Statement* stm
     assert(fallbackBb->JumpsToNext());
     fallbackBb->SetFlags(BBF_NONE_QUIRK);
 
-    // Set nullcheckBb's true jump target
-    nullcheckBb->SetTrueTarget(fallbackBb);
-
     // Fast-path basic block
     GenTree*    fastpathValueDef = gtNewStoreLclVarNode(rtLookupLcl->GetLclNum(), fastPathValueClone);
     BasicBlock* fastPathBb       = fgNewBBFromTreeAfter(BBJ_ALWAYS, nullcheckBb, fastpathValueDef, debugInfo, block);
-
-    // Set nullcheckBb's false jump target
-    nullcheckBb->SetFalseTarget(fastPathBb);
 
     BasicBlock* sizeCheckBb = nullptr;
     if (needsSizeCheck)
@@ -375,8 +369,13 @@ bool Compiler::fgExpandRuntimeLookupsForCall(BasicBlock** pBlock, Statement* stm
 
         GenTree* jtrue = gtNewOperNode(GT_JTRUE, TYP_VOID, sizeCheck);
         // sizeCheckBb fails - jump to fallbackBb
-        sizeCheckBb = fgNewBBFromTreeAfter(BBJ_COND, prevBb, jtrue, debugInfo, fallbackBb);
-        sizeCheckBb->SetFalseTarget(nullcheckBb);
+        sizeCheckBb = fgNewBBFromTreeAfter(BBJ_COND, prevBb, jtrue, debugInfo);
+
+        // sizeCheckBb flows into nullcheckBb in case the size check passes
+        FlowEdge* const trueEdge = fgAddRefPred(fallbackBb, sizeCheckBb);
+        FlowEdge* const falseEdge = fgAddRefPred(nullcheckBb, sizeCheckBb);
+        sizeCheckBb->SetTrueEdge(trueEdge);
+        sizeCheckBb->SetFalseEdge(falseEdge);
     }
 
     //
@@ -390,24 +389,22 @@ bool Compiler::fgExpandRuntimeLookupsForCall(BasicBlock** pBlock, Statement* stm
     if (needsSizeCheck)
     {
         // sizeCheckBb is the first block after prevBb
-        prevBb->SetTargetEdge(fgAddRefPred(sizeCheckBb, prevBb));
-        // sizeCheckBb flows into nullcheckBb in case if the size check passes
-        fgAddRefPred(nullcheckBb, sizeCheckBb);
+        FlowEdge* const edgeToSizeCheck = fgAddRefPred(sizeCheckBb, prevBb);
+        prevBb->SetTargetEdge(edgeToSizeCheck);
         // fallbackBb is reachable from both nullcheckBb and sizeCheckBb
-        fgAddRefPred(fallbackBb, nullcheckBb);
-        fgAddRefPred(fallbackBb, sizeCheckBb);
-        // fastPathBb is only reachable from successful nullcheckBb
-        fgAddRefPred(fastPathBb, nullcheckBb);
     }
     else
     {
         // nullcheckBb is the first block after prevBb
-        prevBb->SetTargetEdge(fgAddRefPred(nullcheckBb, prevBb));
-        // No size check, nullcheckBb jumps to fast path
-        fgAddRefPred(fastPathBb, nullcheckBb);
+        FlowEdge* const edgeToNullCheck = fgAddRefPred(nullcheckBb, prevBb);
+        prevBb->SetTargetEdge(edgeToNullCheck);
         // fallbackBb is only reachable from nullcheckBb (jump destination)
-        fgAddRefPred(fallbackBb, nullcheckBb);
     }
+
+    FlowEdge* const nullCheckToFallBackEdge = fgAddRefPred(fallbackBb, nullcheckBb);
+    FlowEdge* const nullCheckToFastPathEdge = fgAddRefPred(fastPathBb, nullcheckBb);
+    nullcheckBb->SetTrueEdge(nullCheckToFallBackEdge);
+    nullcheckBb->SetFalseEdge(nullCheckToFastPathEdge);
 
     //
     // Re-distribute weights (see '[weight: X]' on the diagrams above)
@@ -682,14 +679,14 @@ bool Compiler::fgExpandThreadLocalAccessForCallNativeAOT(BasicBlock** pBlock, St
     //
     // Update preds in all new blocks
     //
-    fgAddRefPred(fallbackBb, tlsRootNullCondBB);
-    fgAddRefPred(fastPathBb, tlsRootNullCondBB);
+    FlowEdge* const nullCondToFallBackEdge = fgAddRefPred(fallbackBb, tlsRootNullCondBB);
+    FlowEdge* const nullCondToFastPathEdge = fgAddRefPred(fastPathBb, tlsRootNullCondBB);
 
     fgAddRefPred(block, fallbackBb);
     fgAddRefPred(block, fastPathBb);
 
-    tlsRootNullCondBB->SetTrueTarget(fastPathBb);
-    tlsRootNullCondBB->SetFalseTarget(fallbackBb);
+    tlsRootNullCondBB->SetTrueEdge(nullCondToFastPathEdge);
+    tlsRootNullCondBB->SetFalseEdge(nullCondToFallBackEdge);
 
     // Inherit the weights
     block->inheritWeight(prevBb);
@@ -1041,14 +1038,6 @@ bool Compiler::fgExpandThreadLocalAccessForCall(BasicBlock** pBlock, Statement* 
         gtNewStoreLclVarNode(threadStaticBlockLclNum, gtCloneExpr(threadStaticBlockBaseLclValueUse));
     BasicBlock* fastPathBb = fgNewBBFromTreeAfter(BBJ_ALWAYS, fallbackBb, fastPathValueDef, debugInfo, block, true);
 
-    // Set maxThreadStaticBlocksCondBB's jump targets
-    maxThreadStaticBlocksCondBB->SetTrueTarget(fallbackBb);
-    maxThreadStaticBlocksCondBB->SetFalseTarget(threadStaticBlockNullCondBB);
-
-    // Set threadStaticBlockNullCondBB's jump targets
-    threadStaticBlockNullCondBB->SetTrueTarget(fastPathBb);
-    threadStaticBlockNullCondBB->SetFalseTarget(fallbackBb);
-
     //
     // Update preds in all new blocks
     //
@@ -1056,11 +1045,17 @@ bool Compiler::fgExpandThreadLocalAccessForCall(BasicBlock** pBlock, Statement* 
     fgRemoveRefPred(block, prevBb);
     prevBb->SetTargetEdge(fgAddRefPred(maxThreadStaticBlocksCondBB, prevBb));
 
-    fgAddRefPred(threadStaticBlockNullCondBB, maxThreadStaticBlocksCondBB);
-    fgAddRefPred(fallbackBb, maxThreadStaticBlocksCondBB);
+    // Set maxThreadStaticBlocksCondBB's jump targets
+    FlowEdge* const condToNullCondEdge = fgAddRefPred(threadStaticBlockNullCondBB, maxThreadStaticBlocksCondBB);
+    FlowEdge* const condToFallBackEdge = fgAddRefPred(fallbackBb, maxThreadStaticBlocksCondBB);
+    maxThreadStaticBlocksCondBB->SetTrueEdge(condToFallBackEdge);
+    maxThreadStaticBlocksCondBB->SetFalseEdge(condToNullCondEdge);
 
-    fgAddRefPred(fastPathBb, threadStaticBlockNullCondBB);
-    fgAddRefPred(fallbackBb, threadStaticBlockNullCondBB);
+    // Set threadStaticBlockNullCondBB's jump targets
+    FlowEdge* const nullCondToFastPathEdge = fgAddRefPred(fastPathBb, threadStaticBlockNullCondBB);
+    FlowEdge* const nullCondToFallBackEdge = fgAddRefPred(fallbackBb, threadStaticBlockNullCondBB);
+    threadStaticBlockNullCondBB->SetTrueEdge(nullCondToFastPathEdge);
+    threadStaticBlockNullCondBB->SetFalseEdge(nullCondToFallBackEdge);
 
     fgAddRefPred(block, fastPathBb);
     fgAddRefPred(block, fallbackBb);
@@ -1418,13 +1413,14 @@ bool Compiler::fgExpandStaticInitForCall(BasicBlock** pBlock, Statement* stmt, G
 
     // prevBb always flows into isInitedBb
     assert(prevBb->KindIs(BBJ_ALWAYS));
-    prevBb->SetTargetEdge(fgAddRefPred(isInitedBb, prevBb));
+    FlowEdge* const newEdge = fgAddRefPred(isInitedBb, prevBb);
+    prevBb->SetTargetEdge(newEdge);
     prevBb->SetFlags(BBF_NONE_QUIRK);
     assert(prevBb->JumpsToNext());
 
     // Both fastPathBb and helperCallBb have a single common pred - isInitedBb
-    isInitedBb->SetFalseTarget(helperCallBb);
-    fgAddRefPred(helperCallBb, isInitedBb);
+    FlowEdge* const falseEdge = fgAddRefPred(helperCallBb, isInitedBb);
+    isInitedBb->SetFalseEdge(falseEdge);
 
     //
     // Re-distribute weights
@@ -1653,7 +1649,7 @@ bool Compiler::fgVNBasedIntrinsicExpansionForCall_ReadUtf8(BasicBlock** pBlock, 
     //
     // Block 1: lengthCheckBb (we check that dstLen < srcLen)
     //
-    BasicBlock* lengthCheckBb = fgNewBBafter(BBJ_COND, prevBb, true, block);
+    BasicBlock* lengthCheckBb = fgNewBBafter(BBJ_COND, prevBb, true);
     lengthCheckBb->SetFlags(BBF_INTERNAL);
 
     // Set bytesWritten -1 by default, if the fast path is not taken we'll return it as the result.
@@ -1736,10 +1732,13 @@ bool Compiler::fgVNBasedIntrinsicExpansionForCall_ReadUtf8(BasicBlock** pBlock, 
     prevBb->SetTargetEdge(fgAddRefPred(lengthCheckBb, prevBb));
     prevBb->SetFlags(BBF_NONE_QUIRK);
     assert(prevBb->JumpsToNext());
+    
     // lengthCheckBb has two successors: block and fastpathBb
-    lengthCheckBb->SetFalseTarget(fastpathBb);
-    fgAddRefPred(fastpathBb, lengthCheckBb);
-    fgAddRefPred(block, lengthCheckBb);
+    FlowEdge* const trueEdge  = fgAddRefPred(block, lengthCheckBb);
+    FlowEdge* const falseEdge = fgAddRefPred(fastpathBb, lengthCheckBb);
+    lengthCheckBb->SetTrueEdge(trueEdge);
+    lengthCheckBb->SetFalseEdge(falseEdge);
+    
     // fastpathBb flows into block
     fgAddRefPred(block, fastpathBb);
 
@@ -2319,13 +2318,11 @@ bool Compiler::fgLateCastExpansionForCall(BasicBlock** pBlock, Statement* stmt, 
         typeCheckSucceedTree = gtNewNothingNode();
     }
     BasicBlock* typeCheckSucceedBb =
-        fgNewBBFromTreeAfter(BBJ_ALWAYS, fallbackBb, typeCheckSucceedTree, debugInfo, lastBb);
+        fgNewBBFromTreeAfter(BBJ_ALWAYS, fallbackBb, typeCheckSucceedTree, debugInfo);
 
     //
     // Wire up the blocks
     //
-    nullcheckBb->SetTrueTarget(lastBb);
-    nullcheckBb->SetFalseTarget(typeChecksBbs[0]);
 
     // Tricky case - wire up multiple type check blocks (in most cases there is only one)
     for (int candidateId = 0; candidateId < numOfCandidates; candidateId++)
@@ -2333,29 +2330,37 @@ bool Compiler::fgLateCastExpansionForCall(BasicBlock** pBlock, Statement* stmt, 
         BasicBlock* curTypeCheckBb = typeChecksBbs[candidateId];
 
         // All type checks jump straight to the typeCheckSucceedBb on success
-        curTypeCheckBb->SetTrueTarget(typeCheckSucceedBb);
-        fgAddRefPred(typeCheckSucceedBb, curTypeCheckBb);
+        FlowEdge* const trueEdge = fgAddRefPred(typeCheckSucceedBb, curTypeCheckBb);
+        FlowEdge* const falseEdge;
+        curTypeCheckBb->SetTrueEdge(trueEdge);
 
         // or ...
         if (candidateId == numOfCandidates - 1)
         {
             // ... jump to the fallbackBb on last type check's failure
-            curTypeCheckBb->SetFalseTarget(fallbackBb);
-            fgAddRefPred(fallbackBb, curTypeCheckBb);
+            falseEdge = fgAddRefPred(fallbackBb, curTypeCheckBb);
         }
         else
         {
             // ... jump to the next type check on failure
-            curTypeCheckBb->SetFalseTarget(typeChecksBbs[candidateId + 1]);
-            fgAddRefPred(typeChecksBbs[candidateId + 1], curTypeCheckBb);
+            falseEdge = fgAddRefPred(typeChecksBbs[candidateId + 1], curTypeCheckBb);
         }
+
+        curTypeCheckBb->SetFalseEdge(falseEdge);
     }
 
+    FlowEdge* const nullCheckTrueEdge = fgAddRefPred(lastBb, nullcheckBb);
+    FlowEdge* const nullCheckFalseEdge = fgAddRefPred(typeChecksBbs[0], nullcheckBb);
+    nullcheckBb->SetTrueEdge(nullCheckTrueEdge);
+    nullcheckBb->SetFalseEdge(nullCheckFalseEdge);
+
     fgRemoveRefPred(lastBb, firstBb);
-    firstBb->SetTargetEdge(fgAddRefPred(nullcheckBb, firstBb));
-    fgAddRefPred(typeChecksBbs[0], nullcheckBb);
-    fgAddRefPred(lastBb, nullcheckBb);
-    fgAddRefPred(lastBb, typeCheckSucceedBb);
+    FlowEdge* const edgeToNullCheck = fgAddRefPred(nullcheckBb, firstBb);
+    firstBb->SetTargetEdge(edgeToNullCheck);
+
+    FlowEdge* const edgeToLastBb = fgAddRefPred(lastBb, typeCheckSucceedBb);
+    typeCheckSucceedBb->SetTargetEdge(edgeToLastBb);
+
     if (typeCheckFailedAction != TypeCheckFailedAction::CallHelper_AlwaysThrows)
     {
         // if fallbackBb is BBJ_THROW then it has no successors

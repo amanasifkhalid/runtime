@@ -620,10 +620,10 @@ void Compiler::optRedirectBlock(BasicBlock* blk, BlockToBlockMap* redirectMap, R
                 {
                     fgRemoveRefPred(blk->GetTrueTarget(), blk);
                 }
-                blk->SetTrueTarget(newJumpDest);
                 if (updatePreds || addPreds)
                 {
-                    fgAddRefPred(newJumpDest, blk);
+                    FlowEdge* const newEdge = fgAddRefPred(newJumpDest, blk);
+                    blk->SetTrueEdge(newEdge);
                 }
             }
             else if (addPreds)
@@ -638,10 +638,10 @@ void Compiler::optRedirectBlock(BasicBlock* blk, BlockToBlockMap* redirectMap, R
                 {
                     fgRemoveRefPred(blk->GetFalseTarget(), blk);
                 }
-                blk->SetFalseTarget(newJumpDest);
                 if (updatePreds || addPreds)
                 {
-                    fgAddRefPred(newJumpDest, blk);
+                    FlowEdge* const newEdge = fgAddRefPred(newJumpDest, blk);
+                    blk->SetFalseEdge(newEdge);
                 }
             }
             else if (addPreds)
@@ -2134,7 +2134,7 @@ bool Compiler::optInvertWhileLoop(BasicBlock* block)
     bool foundCondTree = false;
 
     // Create a new block after `block` to put the copied condition code.
-    BasicBlock* bNewCond = fgNewBBafter(BBJ_COND, block, /*extendRegion*/ true, bJoin);
+    BasicBlock* bNewCond = fgNewBBafter(BBJ_COND, block, /*extendRegion*/ true);
 
     // Clone each statement in bTest and append to bNewCond.
     for (Statement* const stmt : bTest->Statements())
@@ -2193,9 +2193,10 @@ bool Compiler::optInvertWhileLoop(BasicBlock* block)
 
     // Update pred info
     //
-    bNewCond->SetFalseTarget(bTop);
-    fgAddRefPred(bJoin, bNewCond);
-    fgAddRefPred(bTop, bNewCond);
+    FlowEdge* const trueEdge = fgAddRefPred(bJoin, bNewCond);
+    FlowEdge* const falseEdge = fgAddRefPred(bTop, bNewCond);
+    bNewCond->SetTrueEdge(trueEdge);
+    bNewCond->SetFalseEdge(falseEdge);
 
     fgRemoveRefPred(bTest, block);
     FlowEdge* const newEdge = fgAddRefPred(bNewCond, block);

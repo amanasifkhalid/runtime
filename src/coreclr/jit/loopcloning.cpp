@@ -860,17 +860,18 @@ BasicBlock* LoopCloneContext::CondToStmtInBlock(Compiler*                       
     {
         for (unsigned i = 0; i < conds.Size(); ++i)
         {
-            BasicBlock* newBlk = comp->fgNewBBafter(BBJ_COND, insertAfter, /*extendRegion*/ true, slowPreheader);
+            BasicBlock* newBlk = comp->fgNewBBafter(BBJ_COND, insertAfter, /*extendRegion*/ true);
             newBlk->inheritWeight(insertAfter);
 
             JITDUMP("Adding " FMT_BB " -> " FMT_BB "\n", newBlk->bbNum, newBlk->GetTrueTarget()->bbNum);
-            comp->fgAddRefPred(newBlk->GetTrueTarget(), newBlk);
+            FlowEdge* const trueEdge = comp->fgAddRefPred(slowPreheader, newBlk);
+            newBlk->SetTrueEdge(trueEdge);
 
             if (insertAfter->KindIs(BBJ_COND))
             {
                 JITDUMP("Adding " FMT_BB " -> " FMT_BB "\n", insertAfter->bbNum, newBlk->bbNum);
-                insertAfter->SetFalseTarget(newBlk);
-                comp->fgAddRefPred(newBlk, insertAfter);
+                FlowEdge* const falseEdge = comp->fgAddRefPred(newBlk, insertAfter);
+                insertAfter->SetFalseEdge(falseEdge);
             }
 
             JITDUMP("Adding conditions %u to " FMT_BB "\n", i, newBlk->bbNum);
@@ -2056,8 +2057,8 @@ void Compiler::optCloneLoop(FlowGraphNaturalLoop* loop, LoopCloneContext* contex
 
     // And make sure we insert a pred link for the final fallthrough into the fast preheader.
     assert(condLast->NextIs(fastPreheader));
-    condLast->SetFalseTarget(fastPreheader);
-    fgAddRefPred(fastPreheader, condLast);
+    FlowEdge* const falseEdge = fgAddRefPred(fastPreheader, condLast);
+    condLast->SetFalseEdge(falseEdge);
 }
 
 //-------------------------------------------------------------------------

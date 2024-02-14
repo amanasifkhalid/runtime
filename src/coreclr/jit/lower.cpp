@@ -1072,8 +1072,8 @@ GenTree* Lowering::LowerSwitch(GenTree* node)
             {
                 BasicBlock* newBlock = comp->fgNewBBafter(BBJ_ALWAYS, currentBlock, true, currentBlock->Next());
                 newBlock->SetFlags(BBF_NONE_QUIRK);
-                currentBlock->SetFalseTarget(newBlock);
-                comp->fgAddRefPred(newBlock, currentBlock); // The fall-through predecessor.
+                FlowEdge* const falseEdge = comp->fgAddRefPred(newBlock, currentBlock); // The fall-through predecessor.
+                currentBlock->SetFalseEdge(falseEdge);
                 currentBlock   = newBlock;
                 currentBBRange = &LIR::AsRange(currentBlock);
             }

@@ -640,10 +640,6 @@ void Compiler::fgReplaceJumpTarget(BasicBlock* block, BasicBlock* oldTarget, Bas
                     assert(block->KindIs(BBJ_ALWAYS));
                     assert(block->TargetIs(oldTarget));
                 }
-                else
-                {
-                    block->SetTrueTarget(newTarget);
-                }
 
                 // fgRemoveRefPred should have removed the flow edge
                 FlowEdge* oldEdge = fgRemoveRefPred(oldTarget, block);
@@ -657,9 +653,15 @@ void Compiler::fgReplaceJumpTarget(BasicBlock* block, BasicBlock* oldTarget, Bas
                     newEdge->setLikelihood(1.0);
                     block->SetTargetEdge(newEdge);
                 }
-                else if (oldEdge->hasLikelihood())
+                else
                 {
-                    newEdge->setLikelihood(oldEdge->getLikelihood());
+                    assert(block->KindIs(BBJ_COND));
+                    block->SetTrueEdge(newEdge);
+
+                    if (oldEdge->hasLikelihood())
+                    {
+                        newEdge->setLikelihood(oldEdge->getLikelihood());
+                    }
                 }
             }
             else
@@ -669,8 +671,8 @@ void Compiler::fgReplaceJumpTarget(BasicBlock* block, BasicBlock* oldTarget, Bas
                 // fgRemoveRefPred should have removed the flow edge
                 FlowEdge* oldEdge = fgRemoveRefPred(oldTarget, block);
                 assert(oldEdge != nullptr);
-                block->SetFalseTarget(newTarget);
-                fgAddRefPred(newTarget, block, oldEdge);
+                FlowEdge* const newEdge = fgAddRefPred(newTarget, block, oldEdge);
+                block->SetFalseEdge(newEdge);
             }
             break;
 
@@ -2916,10 +2918,10 @@ void Compiler::fgLinkBasicBlocks()
             {
                 BasicBlock* const trueTarget  = fgLookupBB(curBBdesc->GetTargetOffs());
                 BasicBlock* const falseTarget = curBBdesc->Next();
-                curBBdesc->SetTrueTarget(trueTarget);
-                curBBdesc->SetFalseTarget(falseTarget);
-                fgAddRefPred<initializingPreds>(trueTarget, curBBdesc);
-                fgAddRefPred<initializingPreds>(falseTarget, curBBdesc);
+                FlowEdge* const trueEdge = fgAddRefPred<initializingPreds>(trueTarget, curBBdesc);
+                FlowEdge* const falseEdge = fgAddRefPred<initializingPreds>(falseTarget, curBBdesc);
+                curBBdesc->SetTrueEdge(trueEdge);
+                curBBdesc->SetFalseEdge(falseEdge);
 
                 if (trueTarget->bbNum <= curBBdesc->bbNum)
                 {
@@ -5402,15 +5404,13 @@ BasicBlock* Compiler::fgConnectFallThrough(BasicBlock* bSrc, BasicBlock* bDst)
     {
         // Add a new block after bSrc which jumps to 'bDst'
         jmpBlk = fgNewBBafter(BBJ_ALWAYS, bSrc, true, bDst);
-        bSrc->SetFalseTarget(jmpBlk);
-        fgAddRefPred(jmpBlk, bSrc, fgGetPredForBlock(bDst, bSrc));
+        FlowEdge* const newEdge = fgAddRefPred(jmpBlk, bSrc, bSrc->GetFalseEdge());
+        bSrc->SetFalseEdge(newEdge);
 
         // When adding a new jmpBlk we will set the bbWeight and bbFlags
         //
         if (fgHaveValidEdgeWeights && fgHaveProfileWeights())
         {
-            FlowEdge* const newEdge = fgGetPredForBlock(jmpBlk, bSrc);
-
             jmpBlk->bbWeight = (newEdge->edgeWeightMin() + newEdge->edgeWeightMax()) / 2;
             if (bSrc->bbWeight == BB_ZERO_WEIGHT)
             {
