@@ -1437,14 +1437,12 @@ bool Compiler::fgExpandStaticInitForCall(BasicBlock** pBlock, Statement* stmt, G
 
     // Block has two preds now: either isInitedBb or helperCallBb
     {
-        FlowEdge* const newEdge = fgAddRefPred(block, isInitedBb);
-        isInitedBb->SetTargetEdge(newEdge);
-    }
-    
-    {
         FlowEdge* const newEdge = fgAddRefPred(block, helperCallBb);
         helperCallBb->SetTargetEdge(newEdge);
     }
+
+    FlowEdge* const trueEdge = fgAddRefPred(block, isInitedBb);
+    isInitedBb->SetTrueEdge(trueEdge);    
 
     // prevBb always flows into isInitedBb
     assert(prevBb->KindIs(BBJ_ALWAYS));

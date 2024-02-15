@@ -1879,12 +1879,12 @@ bool Compiler::fgOptimizeSwitchBranches(BasicBlock* block)
                 }
             }
 
-            // Maintain, if necessary, the set of unique targets of "block."
-            UpdateSwitchTableTarget(block, bDest, bNewDest);
-
-            // Update the switch jump table
+            // Update the switch jump table (this has to happen before calling UpdateSwitchTableTarget)
             FlowEdge* const newEdge = fgAddRefPred(bNewDest, block, fgRemoveRefPred(bDest, block));
             *jmpTab = newEdge;
+
+            // Maintain, if necessary, the set of unique targets of "block."
+            UpdateSwitchTableTarget(block, bDest, bNewDest);
 
             // we optimized a Switch label - goto REPEAT_SWITCH to follow this new jump
             returnvalue = true;
@@ -5021,11 +5021,9 @@ bool Compiler::fgUpdateFlowGraph(bool doTailDuplication /* = false */, bool isPh
                         }
 
                         // Optimize the Conditional JUMP to go to the new target
+                        block->SetFalseEdge(block->GetTrueEdge());
                         FlowEdge* const newEdge = fgAddRefPred(bNext->GetTarget(), block, fgRemoveRefPred(bNext->GetTarget(), bNext));
                         block->SetTrueEdge(newEdge);
-
-                        // TODO: Fix false edge
-                        // block->SetFalseEdge(bNext->Next());
 
                         /*
                           Unlink bNext from the BasicBlock list; note that we can

@@ -2164,7 +2164,7 @@ inline BasicBlock::BBSuccList::BBSuccList(const BasicBlock* block)
             }
             else
             {
-                m_succs[1] = block->GetFalseEdge();
+                m_succs[1] = block->GetTrueEdge();
                 m_end      = &m_succs[2];
             }
             break;

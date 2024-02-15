@@ -287,16 +287,19 @@ private:
             checkBlock->SetCond(elseEdge, thenEdge);
 
             // thenBlock
-            assert(thenBlock->TargetIs(remainderBlock));
             {
+                assert(thenBlock->KindIs(BBJ_ALWAYS));
                 FlowEdge* const newEdge = compiler->fgAddRefPred(remainderBlock, thenBlock);
                 newEdge->setLikelihood(1.0);
+                thenBlock->SetTargetEdge(newEdge);
             }
 
             // elseBlock
             {
+                assert(elseBlock->KindIs(BBJ_ALWAYS));
                 FlowEdge* const newEdge = compiler->fgAddRefPred(remainderBlock, elseBlock);
                 newEdge->setLikelihood(1.0);
+                elseBlock->SetTargetEdge(newEdge);
             }
         }
 

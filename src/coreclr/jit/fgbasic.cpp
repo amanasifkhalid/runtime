@@ -383,36 +383,27 @@ void Compiler::fgChangeSwitchBlock(BasicBlock* oldSwitchBlock, BasicBlock* newSw
     assert(fgPredsComputed);
 
     // Walk the switch's jump table, updating the predecessor for each branch.
-    for (BasicBlock* const bJump : oldSwitchBlock->SwitchTargets())
+    BBswtDesc* swtDesc = oldSwitchBlock->GetSwitchTargets();
+
+    for (unsigned i = 0; i < swtDesc->bbsCount; i++)
     {
-        noway_assert(bJump != nullptr);
+        FlowEdge* succEdge = swtDesc->bbsDstTab[i];
+        assert(succEdge != nullptr);
 
-        // Note that if there are duplicate branch targets in the switch jump table,
-        // fgRemoveRefPred()/fgAddRefPred() will do the right thing: the second and
-        // subsequent duplicates will simply subtract from and add to the duplicate
-        // count (respectively).
-        //
-        // However this does the "wrong" thing with respect to edge profile
-        // data; the old edge is not returned by fgRemoveRefPred until it has
-        // a dup count of 0, and the fgAddRefPred only uses the optional
-        // old edge arg when the new edge is first created.
-        //
-        // Remove the old edge [oldSwitchBlock => bJump]
-        //
-        assert(bJump->countOfInEdges() > 0);
-        FlowEdge* const oldEdge = fgRemoveRefPred(bJump, oldSwitchBlock);
-
-        //
-        // Create the new edge [newSwitchBlock => bJump]
-        //
-        FlowEdge* const newEdge = fgAddRefPred(bJump, newSwitchBlock);
-
-        // Handle the profile update, once we get our hands on the old edge.
-        //
-        if (oldEdge != nullptr)
+        if (succEdge->getSourceBlock() != oldSwitchBlock)
         {
-            assert(!newEdge->hasLikelihood());
-            newEdge->setLikelihood(oldEdge->getLikelihood());
+            // swtDesc can have duplicate targets, so we may have updated this edge already
+            //
+            assert(succEdge->getSourceBlock() == newSwitchBlock);
+            assert(succEdge->getDupCount() > 1);
+        }
+        else
+        {
+            // Redirect edge's source block from oldSwitchBlock to newSwitchBlock,
+            // and keep successor block's pred list in order
+            //
+            succEdge->setSourceBlock(newSwitchBlock);
+            succEdge->getDestinationBlock()->ensurePredListOrder(this);
         }
     }
 
@@ -457,10 +448,12 @@ void Compiler::fgChangeEhfBlock(BasicBlock* oldBlock, BasicBlock* newBlock)
         FlowEdge* succEdge = ehfDesc->bbeSuccs[i];
         assert(succEdge != nullptr);
 
-        // Redirect edge's source block from oldBlock to newBlock
+        // Redirect edge's source block from oldBlock to newBlock,
+        // and keep successor block's pred list in order
         //
         assert(succEdge->getSourceBlock() == oldBlock);
         succEdge->setSourceBlock(newBlock);
+        succEdge->getDestinationBlock()->ensurePredListOrder(this);
     }
 }
 
@@ -4766,14 +4759,15 @@ BasicBlock* Compiler::fgSplitBlockAtEnd(BasicBlock* curr)
     // Remove flags from the old block that are no longer possible.
     curr->RemoveFlags(BBF_HAS_JMP | BBF_RETLESS_CALL);
 
-    // Transfer the kind and target. Do this after the code above, to avoid null-ing out the old targets used by the
-    // above code (and so newBlock->bbNext is valid, so SetCond() can initialize bbFalseTarget if newBlock is a
-    // BBJ_COND).
-    newBlock->TransferTarget(curr);
 
     // Default to fallthrough, and add the arc for that.
     FlowEdge* const newEdge = fgAddRefPred(newBlock, curr);
     newEdge->setLikelihood(1.0);
+    
+    // Transfer the kind and target. Do this after the code above, to avoid null-ing out the old targets used by the
+    // above code (and so newBlock->bbNext is valid, so SetCond() can initialize bbFalseTarget if newBlock is a
+    // BBJ_COND).
+    newBlock->TransferTarget(curr);
 
     curr->SetKindAndTargetEdge(BBJ_ALWAYS, newEdge);
     curr->SetFlags(BBF_NONE_QUIRK);
@@ -5004,7 +4998,6 @@ BasicBlock* Compiler::fgSplitEdge(BasicBlock* curr, BasicBlock* succ)
         // TODO-NoFallThrough: Once bbFalseTarget can diverge from bbNext, this will be unnecessary for BBJ_COND
         newBlock = fgNewBBafter(BBJ_ALWAYS, curr, true /* extendRegion */);
         newBlock->SetFlags(BBF_NONE_QUIRK);
-        assert(newBlock->JumpsToNext());
     }
     else
     {

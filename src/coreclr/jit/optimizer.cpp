@@ -677,7 +677,8 @@ void Compiler::optRedirectBlock(BasicBlock* blk, BasicBlock* newBlk, BlockToBloc
         {
             BBswtDesc* currSwtDesc = blk->GetSwitchTargets();
             BBswtDesc* newSwtDesc = new (this, CMK_BasicBlock) BBswtDesc(currSwtDesc);
-            FlowEdge** jumpTable = new (this, CMK_FlowEdge) FlowEdge*[newSwtDesc->bbsCount];
+            newSwtDesc->bbsDstTab = new (this, CMK_FlowEdge) FlowEdge*[newSwtDesc->bbsCount];
+            FlowEdge** jumpPtr = newSwtDesc->bbsDstTab;
 
             for (BasicBlock* const switchTarget : blk->SwitchTargets())
             {
@@ -693,11 +694,10 @@ void Compiler::optRedirectBlock(BasicBlock* blk, BasicBlock* newBlk, BlockToBloc
                     newEdge = fgAddRefPred(switchTarget, newBlk);
                 }
 
-                *jumpTable = newEdge;
-                jumpTable++;
+                *jumpPtr = newEdge;
+                jumpPtr++;
             }
 
-            newSwtDesc->bbsDstTab = jumpTable;
             newBlk->SetSwitch(newSwtDesc);
             break;
         }
