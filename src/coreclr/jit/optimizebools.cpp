@@ -749,9 +749,9 @@ bool OptBoolsDsc::optOptimizeRangeTests()
 
     // We're interested in just two shapes for e.g. "X > 10 && X < 100" range test:
     //
-    FlowEdge* notInRangeEdge = m_b1->GetTrueEdge();
-    FlowEdge* inRangeEdge;
-    if (m_b2->TrueEdgeIs(notInRangeEdge))
+    BasicBlock* notInRangeBb = m_b1->GetTrueTarget();
+    BasicBlock* inRangeBb;
+    if (m_b2->TrueTargetIs(notInRangeBb))
     {
         // Shape 1: both conditions jump to NotInRange
         //
@@ -763,9 +763,9 @@ bool OptBoolsDsc::optOptimizeRangeTests()
         //
         // InRange:
         // ...
-        inRangeEdge = m_b2->GetFalseEdge();
+        inRangeBb = m_b2->GetFalseTarget();
     }
-    else if (m_b2->FalseEdgeIs(notInRangeEdge))
+    else if (m_b2->FalseTargetIs(notInRangeBb))
     {
         // Shape 2: 2nd block jumps to InRange
         //
@@ -777,7 +777,7 @@ bool OptBoolsDsc::optOptimizeRangeTests()
         //
         // NotInRange:
         // ...
-        inRangeEdge = m_b2->GetTrueEdge();
+        inRangeBb = m_b2->GetTrueTarget();
     }
     else
     {
@@ -800,24 +800,23 @@ bool OptBoolsDsc::optOptimizeRangeTests()
     const bool cmp1IsReversed = true;
 
     // cmp2 can be either reversed or not
-    const bool cmp2IsReversed = m_b2->TrueEdgeIs(notInRangeEdge);
+    const bool cmp2IsReversed = m_b2->TrueTargetIs(notInRangeBb);
 
     if (!FoldRangeTests(m_comp, cmp1, cmp1IsReversed, cmp2, cmp2IsReversed))
     {
         return false;
     }
 
-    // Re-direct firstBlock to jump to inRangeEdge destination block
-    FlowEdge* const newEdge = m_comp->fgAddRefPred(inRangeEdge->getDestinationBlock(), m_b1);
+    // Re-direct firstBlock to jump to inRangeBb destination block
+    FlowEdge* const newEdge = m_comp->fgAddRefPred(inRangeBb, m_b1);
     if (!cmp2IsReversed)
     {
+        m_b1->SetFalseEdge(m_b1->GetTrueEdge());
         m_b1->SetTrueEdge(newEdge);
-        m_b1->SetFalseEdge(notInRangeEdge);
     }
     else
     {
         m_b1->SetFalseEdge(newEdge);
-        assert(m_b1->TrueEdgeIs(notInRangeEdge));
     }
 
     // Remove the 2nd condition block as we no longer need it

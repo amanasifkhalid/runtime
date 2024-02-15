@@ -840,22 +840,9 @@ public:
         bbTrueEdge = trueEdge;
     }
 
-    bool TrueEdgeIs(const FlowEdge* targetEdge) const
-    {
-        assert(KindIs(BBJ_COND));
-        assert(bbTrueEdge != nullptr);
-        assert(bbTrueEdge->getDestinationBlock() != nullptr);
-        assert(bbTrueEdge->getSourceBlock() == this);
-        return (bbTrueEdge == targetEdge);
-    }
-
     bool TrueTargetIs(const BasicBlock* target) const
     {
-        assert(KindIs(BBJ_COND));
-        assert(bbTrueEdge != nullptr);
-        assert(bbTrueEdge->getDestinationBlock() != nullptr);
-        assert(bbTrueEdge->getSourceBlock() == this);
-        return (bbTrueEdge->getDestinationBlock() == target);
+        return (GetTrueTarget() == target);
     }
 
     FlowEdge* GetFalseEdge() const
@@ -878,15 +865,6 @@ public:
         assert(falseEdge->getDestinationBlock() != nullptr);
         assert(falseEdge->getSourceBlock() == this);
         bbFalseEdge = falseEdge;
-    }
-
-    bool FalseEdgeIs(const FlowEdge* targetEdge) const
-    {
-        assert(KindIs(BBJ_COND));
-        assert(bbFalseEdge != nullptr);
-        assert(bbFalseEdge->getDestinationBlock() != nullptr);
-        assert(bbFalseEdge->getSourceBlock() == this);
-        return (bbFalseEdge == targetEdge);
     }
 
     bool FalseTargetIs(const BasicBlock* target) const
@@ -2158,7 +2136,7 @@ inline BasicBlock::BBSuccList::BBSuccList(const BasicBlock* block)
 
             // If both fall-through and branch successors are identical, then only include
             // them once in the iteration (this is the same behavior as NumSucc()/GetSucc()).
-            if (block->TrueEdgeIs(block->GetFalseEdge()))
+            if (block->bbTrueEdge == block->bbFalseEdge)
             {
                 m_end = &m_succs[1];
             }

@@ -669,7 +669,7 @@ BasicBlockVisit BasicBlock::VisitAllSuccs(Compiler* comp, TFunc func)
         case BBJ_COND:
             RETURN_ON_ABORT(func(GetFalseTarget()));
 
-            if (!TrueEdgeIs(GetFalseEdge()))
+            if (bbTrueEdge != bbFalseEdge)
             {
                 RETURN_ON_ABORT(func(GetTrueTarget()));
             }
@@ -736,7 +736,7 @@ BasicBlockVisit BasicBlock::VisitRegularSuccs(Compiler* comp, TFunc func)
         case BBJ_COND:
             RETURN_ON_ABORT(func(GetFalseTarget()));
 
-            if (!TrueEdgeIs(GetFalseEdge()))
+            if (bbTrueEdge != bbFalseEdge)
             {
                 RETURN_ON_ABORT(func(GetTrueTarget()));
             }

@@ -2476,6 +2476,10 @@ bool Compiler::fgOptimizeUncondBranchToSimpleCond(BasicBlock* block, BasicBlock*
     //
     assert(!target->IsLast());
     BasicBlock* next = fgNewBBafter(BBJ_ALWAYS, block, true);
+    
+    // The new block 'next' will inherit its weight from 'block'
+    //
+    next->inheritWeight(block);
 
     // Fix up block's flow
     //
@@ -2483,10 +2487,6 @@ bool Compiler::fgOptimizeUncondBranchToSimpleCond(BasicBlock* block, BasicBlock*
     FlowEdge* const trueEdge = fgAddRefPred(target->GetTrueTarget(), block);
     FlowEdge* const falseEdge = fgAddRefPred(next, block);
     block->SetCond(trueEdge, falseEdge);
-
-    // The new block 'next' will inherit its weight from 'block'
-    //
-    next->inheritWeight(block);
     
     FlowEdge* const nextEdge = fgAddRefPred(target->GetFalseTarget(), next);
     next->SetTargetEdge(nextEdge);
