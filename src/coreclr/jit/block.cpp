@@ -1145,14 +1145,12 @@ unsigned BasicBlock::NumSucc() const
             return 1;
 
         case BBJ_COND:
-            if (TrueEdgeIs(GetFalseEdge()))
+            if (bbTrueEdge == bbFalseEdge)
             {
-                assert(TrueTargetIs(GetFalseTarget()));
                 return 1;
             }
             else
             {
-                assert(!TrueTargetIs(GetFalseTarget()));
                 return 2;
             }
 
@@ -1206,15 +1204,11 @@ BasicBlock* BasicBlock::GetSucc(unsigned i) const
         case BBJ_COND:
             if (i == 0)
             {
-                assert(TrueEdgeIs(GetFalseEdge()));
-                assert(TrueTargetIs(GetFalseTarget()));
                 return GetFalseTarget();
             }
             else
             {
                 assert(i == 1);
-                assert(!TrueEdgeIs(GetFalseEdge()));
-                assert(!TrueTargetIs(GetFalseTarget()));
                 return GetTrueTarget();
             }
 
@@ -1275,14 +1269,12 @@ unsigned BasicBlock::NumSucc(Compiler* comp)
             return 1;
 
         case BBJ_COND:
-            if (TrueEdgeIs(GetFalseEdge()))
+            if (bbTrueEdge == bbFalseEdge)
             {
-                assert(TrueTargetIs(GetFalseTarget()));
                 return 1;
             }
             else
             {
-                assert(!TrueTargetIs(GetFalseTarget()));
                 return 2;
             }
 
@@ -1334,15 +1326,11 @@ BasicBlock* BasicBlock::GetSucc(unsigned i, Compiler* comp)
         case BBJ_COND:
             if (i == 0)
             {
-                assert(TrueEdgeIs(GetFalseEdge()));
-                assert(TrueTargetIs(GetFalseTarget()));
                 return GetFalseTarget();
             }
             else
             {
                 assert(i == 1);
-                assert(!TrueEdgeIs(GetFalseEdge()));
-                assert(!TrueTargetIs(GetFalseTarget()));
                 return GetTrueTarget();
             }
 

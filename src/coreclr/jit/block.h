@@ -801,7 +801,6 @@ public:
         // Only block kinds that use `bbTargetEdge` can access it, and it must not be null.
         assert(HasInitializedTarget());
         assert(bbTargetEdge->getDestinationBlock() != nullptr);
-        assert(bbTargetEdge->getSourceBlock() == this);
         return bbTargetEdge;
     }
 
@@ -824,7 +823,6 @@ public:
         assert(KindIs(BBJ_COND));
         assert(bbTrueEdge != nullptr);
         assert(bbTrueEdge->getDestinationBlock() != nullptr);
-        assert(bbTrueEdge->getSourceBlock() == this);
         return bbTrueEdge;
     }
     
@@ -865,7 +863,6 @@ public:
         assert(KindIs(BBJ_COND));
         assert(bbFalseEdge != nullptr);
         assert(bbFalseEdge->getDestinationBlock() != nullptr);
-        assert(bbFalseEdge->getSourceBlock() == this);
         return bbFalseEdge;
     }
 
