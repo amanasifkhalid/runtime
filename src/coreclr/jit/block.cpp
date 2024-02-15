@@ -659,11 +659,11 @@ void BasicBlock::dspKind() const
             else
             {
                 const unsigned     jumpCnt = bbEhfTargets->bbeCount;
-                BasicBlock** const jumpTab = bbEhfTargets->bbeSuccs;
+                FlowEdge** const   jumpTab = bbEhfTargets->bbeSuccs;
 
                 for (unsigned i = 0; i < jumpCnt; i++)
                 {
-                    printf("%c%s", (i == 0) ? ' ' : ',', dspBlockNum(jumpTab[i]));
+                    printf("%c%s", (i == 0) ? ' ' : ',', dspBlockNum(jumpTab[i]->getDestinationBlock()));
                 }
             }
 
@@ -676,11 +676,11 @@ void BasicBlock::dspKind() const
             break;
 
         case BBJ_EHFILTERRET:
-            printf(" -> %s (fltret)", dspBlockNum(bbTarget));
+            printf(" -> %s (fltret)", dspBlockNum(GetTarget()));
             break;
 
         case BBJ_EHCATCHRET:
-            printf(" -> %s (cret)", dspBlockNum(bbTarget));
+            printf(" -> %s (cret)", dspBlockNum(GetTarget()));
             break;
 
         case BBJ_THROW:
@@ -694,28 +694,28 @@ void BasicBlock::dspKind() const
         case BBJ_ALWAYS:
             if (HasFlag(BBF_KEEP_BBJ_ALWAYS))
             {
-                printf(" -> %s (ALWAYS)", dspBlockNum(bbTarget));
+                printf(" -> %s (ALWAYS)", dspBlockNum(GetTarget()));
             }
             else
             {
-                printf(" -> %s (always)", dspBlockNum(bbTarget));
+                printf(" -> %s (always)", dspBlockNum(GetTarget()));
             }
             break;
 
         case BBJ_LEAVE:
-            printf(" -> %s (leave)", dspBlockNum(bbTarget));
+            printf(" -> %s (leave)", dspBlockNum(GetTarget()));
             break;
 
         case BBJ_CALLFINALLY:
-            printf(" -> %s (callf)", dspBlockNum(bbTarget));
+            printf(" -> %s (callf)", dspBlockNum(GetTarget()));
             break;
 
         case BBJ_CALLFINALLYRET:
-            printf(" -> %s (callfr)", dspBlockNum(bbTarget));
+            printf(" -> %s (callfr)", dspBlockNum(GetTarget()));
             break;
 
         case BBJ_COND:
-            printf(" -> %s,%s (cond)", dspBlockNum(bbTrueTarget), dspBlockNum(bbFalseTarget));
+            printf(" -> %s,%s (cond)", dspBlockNum(GetTrueTarget()), dspBlockNum(GetFalseTarget()));
             break;
 
         case BBJ_SWITCH:
@@ -723,11 +723,11 @@ void BasicBlock::dspKind() const
             printf(" ->");
 
             const unsigned     jumpCnt = bbSwtTargets->bbsCount;
-            BasicBlock** const jumpTab = bbSwtTargets->bbsDstTab;
+            FlowEdge** const   jumpTab = bbSwtTargets->bbsDstTab;
 
             for (unsigned i = 0; i < jumpCnt; i++)
             {
-                printf("%c%s", (i == 0) ? ' ' : ',', dspBlockNum(jumpTab[i]));
+                printf("%c%s", (i == 0) ? ' ' : ',', dspBlockNum(jumpTab[i]->getDestinationBlock()));
 
                 const bool isDefault = bbSwtTargets->bbsHasDefault && (i == jumpCnt - 1);
                 if (isDefault)
@@ -858,21 +858,21 @@ void BasicBlock::TransferTarget(BasicBlock* from)
             from->bbEhfTargets = nullptr; // Make sure nobody uses the descriptor after this.
             break;
         case BBJ_COND:
-            SetCond(from->GetTrueTarget(), from->GetFalseTarget());
+            SetCond(from->GetTrueEdge(), from->GetFalseEdge());
             break;
         case BBJ_ALWAYS:
-            SetKindAndTarget(from->GetKind(), from->GetTarget());
             CopyFlags(from, BBF_NONE_QUIRK);
-            break;
+
+            FALLTHROUGH;
         case BBJ_CALLFINALLY:
         case BBJ_CALLFINALLYRET:
         case BBJ_EHCATCHRET:
         case BBJ_EHFILTERRET:
         case BBJ_LEAVE:
-            SetKindAndTarget(from->GetKind(), from->GetTarget());
+            SetKindAndTargetEdge(from->GetKind(), from->GetTargetEdge());
             break;
         default:
-            SetKindAndTarget(from->GetKind()); // Clear the target
+            SetKindAndTargetEdge(from->GetKind()); // Clear the target
             break;
     }
     assert(KindIs(from->GetKind()));
@@ -985,7 +985,7 @@ BasicBlock* BasicBlock::GetUniquePred(Compiler* compiler) const
 //
 BasicBlock* BasicBlock::GetUniqueSucc() const
 {
-    return KindIs(BBJ_ALWAYS) ? bbTarget : nullptr;
+    return KindIs(BBJ_ALWAYS) ? GetTarget() : nullptr;
 }
 
 // Static vars.
@@ -1219,10 +1219,10 @@ BasicBlock* BasicBlock::GetSucc(unsigned i) const
             }
 
         case BBJ_EHFINALLYRET:
-            return bbEhfTargets->bbeSuccs[i];
+            return bbEhfTargets->bbeSuccs[i]->getDestinationBlock();
 
         case BBJ_SWITCH:
-            return bbSwtTargets->bbsDstTab[i];
+            return bbSwtTargets->bbsDstTab[i]->getDestinationBlock();
 
         default:
             unreached();
@@ -1322,7 +1322,7 @@ BasicBlock* BasicBlock::GetSucc(unsigned i, Compiler* comp)
         case BBJ_EHFINALLYRET:
             assert(bbEhfTargets != nullptr);
             assert(i < bbEhfTargets->bbeCount);
-            return bbEhfTargets->bbeSuccs[i];
+            return bbEhfTargets->bbeSuccs[i]->getDestinationBlock();
 
         case BBJ_CALLFINALLY:
         case BBJ_CALLFINALLYRET:
@@ -1797,7 +1797,7 @@ BBehfDesc::BBehfDesc(Compiler* comp, const BBehfDesc* other) : bbeCount(other->b
 {
     // Allocate and fill in a new dst tab
     //
-    bbeSuccs = new (comp, CMK_BasicBlock) BasicBlock*[bbeCount];
+    bbeSuccs = new (comp, CMK_FlowEdge) FlowEdge*[bbeCount];
     for (unsigned i = 0; i < bbeCount; i++)
     {
         bbeSuccs[i] = other->bbeSuccs[i];

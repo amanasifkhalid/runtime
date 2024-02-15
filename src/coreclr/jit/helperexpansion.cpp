@@ -385,6 +385,7 @@ bool Compiler::fgExpandRuntimeLookupsForCall(BasicBlock** pBlock, Statement* stm
     {
         FlowEdge* const newEdge = fgAddRefPred(block, fastPathBb);
         fastPathBb->SetTargetEdge(newEdge);
+    }
 
     {
         FlowEdge* const newEdge = fgAddRefPred(block, fallbackBb);
@@ -2366,8 +2367,8 @@ bool Compiler::fgLateCastExpansionForCall(BasicBlock** pBlock, Statement* stmt, 
 
         // All type checks jump straight to the typeCheckSucceedBb on success
         FlowEdge* const trueEdge = fgAddRefPred(typeCheckSucceedBb, curTypeCheckBb);
-        FlowEdge* const falseEdge;
         curTypeCheckBb->SetTrueEdge(trueEdge);
+        FlowEdge* falseEdge;
 
         // or ...
         if (candidateId == numOfCandidates - 1)

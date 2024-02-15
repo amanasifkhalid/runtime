@@ -4556,6 +4556,20 @@ void FlowEdge::setEdgeWeights(weight_t theMinWeight, weight_t theMaxWeight, Basi
     m_edgeWeightMax = theMaxWeight;
 }
 
+//------------------------------------------------------------------------
+// getLikelyWeight: Calculates the edge weight using the source block's weight,
+// and the likelihood that this edge is taken.
+//
+// Notes:
+//    This is defined in fgprofile.cpp instead of in-line, as it requires BasicBlock
+//    to be defined, but BasicBlock requires FlowEdge to be defined, too.
+//
+weight_t FlowEdge::getLikelyWeight() const
+{
+    assert(m_likelihoodSet);
+    return m_likelihood * m_sourceBlock->bbWeight;
+}
+
 //-------------------------------------------------------------
 // fgComputeBlockAndEdgeWeights: determine weights for blocks
 //   and optionally for edges

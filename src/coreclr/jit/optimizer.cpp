@@ -592,7 +592,7 @@ void Compiler::optRedirectBlock(BasicBlock* blk, BasicBlock* newBlk, BlockToBloc
         case BBJ_LEAVE:
         {
             BasicBlock* currTarget = blk->GetTarget();
-            FlowEdge* const newEdge;
+            FlowEdge* newEdge;
 
             // Determine if newBlk should be redirected to a different target from blk's target
             if (redirectMap->Lookup(currTarget, &newTarget))
@@ -606,7 +606,7 @@ void Compiler::optRedirectBlock(BasicBlock* blk, BasicBlock* newBlk, BlockToBloc
                 newEdge = fgAddRefPred(currTarget, newBlk);
             }
 
-            newBlk->SetKindAndTargetEdge(blk->GetKind, newEdge);
+            newBlk->SetKindAndTargetEdge(blk->GetKind(), newEdge);
             break;
         }
 
@@ -614,8 +614,8 @@ void Compiler::optRedirectBlock(BasicBlock* blk, BasicBlock* newBlk, BlockToBloc
         {
             BasicBlock* currTrueTarget  = blk->GetTrueTarget();
             BasicBlock* currFalseTarget = blk->GetFalseTarget();
-            FlowEdge* const trueEdge;
-            FlowEdge* const falseEdge;
+            FlowEdge* trueEdge;
+            FlowEdge* falseEdge;
 
             // Determine if newBLk should be redirected to a different true target from blk's true target
             if (redirectMap->Lookup(currTrueTarget, &newTarget))
@@ -652,7 +652,7 @@ void Compiler::optRedirectBlock(BasicBlock* blk, BasicBlock* newBlk, BlockToBloc
 
             for (BasicBlock* const ehfTarget : blk->EHFinallyRetSuccs())
             {
-                FlowEdge* const newEdge;
+                FlowEdge* newEdge;
 
                 // Determine if newBlk should target ehfTarget, or be redirected
                 if (redirectMap->Lookup(ehfTarget, &newTarget))
@@ -681,7 +681,7 @@ void Compiler::optRedirectBlock(BasicBlock* blk, BasicBlock* newBlk, BlockToBloc
 
             for (BasicBlock* const switchTarget : blk->SwitchTargets())
             {
-                FlowEdge* const newEdge;
+                FlowEdge* newEdge;
 
                 // Determine if newBlk should target switchTarget, or be redirected
                 if (redirectMap->Lookup(switchTarget, &newTarget))

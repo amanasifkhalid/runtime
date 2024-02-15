@@ -347,7 +347,7 @@ bool Compiler::optSwitchConvert(BasicBlock* firstBlock, int testsCount, ssize_t*
 
     const unsigned jumpCount = static_cast<unsigned>(maxValue - minValue + 1);
     assert((jumpCount > 0) && (jumpCount <= SWITCH_MAX_DISTANCE + 1));
-    const FlowEdge** jmpTab = new (this, CMK_FlowEdge) FlowEdge*[jumpCount + 1 /*default case*/];
+    FlowEdge** jmpTab = new (this, CMK_FlowEdge) FlowEdge*[jumpCount + 1 /*default case*/];
 
     // Quirk: lastBlock's false target may have diverged from bbNext. If the false target is behind firstBlock,
     // we may create a cycle in the BasicBlock list by setting firstBlock->bbNext to it.

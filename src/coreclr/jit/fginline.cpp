@@ -676,7 +676,7 @@ private:
                 if (condTree->IsIntegralConst(0))
                 {
                     m_compiler->fgRemoveRefPred(block->GetTrueTarget(), block);
-                    block->SetKindAndTargetEdge(BBJ_ALWAYS, block->GetFalseTarget());
+                    block->SetKindAndTargetEdge(BBJ_ALWAYS, block->GetFalseEdge());
                     block->SetFlags(BBF_NONE_QUIRK);
                 }
                 else

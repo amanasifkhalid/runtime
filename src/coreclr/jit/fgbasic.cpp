@@ -2989,7 +2989,7 @@ void Compiler::fgLinkBasicBlocks()
 
                 /* Default case of CEE_SWITCH (next block), is at end of jumpTab[] */
 
-                noway_assert(curBBdesc->NextIs(*(jumpPtr - 1)->getDestinationBlock()));
+                noway_assert(curBBdesc->NextIs((*(jumpPtr - 1))->getDestinationBlock()));
                 break;
             }
 
