@@ -2684,7 +2684,7 @@ bool Compiler::fgNormalizeEHCase3()
                     newLast->bbCodeOffsEnd = newLast->bbCodeOffs; // code size = 0. TODO: use BAD_IL_OFFSET instead?
                     newLast->inheritWeight(insertAfterBlk);
                     newLast->SetFlags(BBF_INTERNAL | BBF_NONE_QUIRK);
-                    
+
                     FlowEdge* const newEdge = fgAddRefPred(newLast, insertAfterBlk);
                     newEdge->setLikelihood(1.0);
                     insertAfterBlk->SetKindAndTargetEdge(BBJ_ALWAYS, newEdge);

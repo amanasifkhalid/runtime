@@ -139,10 +139,10 @@ bool Compiler::optSwitchDetectAndConvert(BasicBlock* firstBlock)
 {
     assert(firstBlock->KindIs(BBJ_COND));
 
-    GenTree*    variableNode = nullptr;
-    ssize_t     cns          = 0;
-    FlowEdge* trueEdge       = nullptr;
-    FlowEdge* falseEdge      = nullptr;
+    GenTree*  variableNode = nullptr;
+    ssize_t   cns          = 0;
+    FlowEdge* trueEdge     = nullptr;
+    FlowEdge* falseEdge    = nullptr;
 
     // The algorithm is simple - we check that the given block is a constant test block
     // and then try to accumulate as many constant test blocks as possible. Once we hit
@@ -168,10 +168,10 @@ bool Compiler::optSwitchDetectAndConvert(BasicBlock* firstBlock)
         // Now walk the next blocks and see if they are basically the same type of test
         for (const BasicBlock* currBb = firstBlock->Next(); currBb != nullptr; currBb = currBb->Next())
         {
-            GenTree*    currVariableNode = nullptr;
-            ssize_t     currCns          = 0;
-            FlowEdge*   currTrueEdge     = nullptr;
-            FlowEdge*   currFalseEdge    = nullptr;
+            GenTree*  currVariableNode = nullptr;
+            ssize_t   currCns          = 0;
+            FlowEdge* currTrueEdge     = nullptr;
+            FlowEdge* currFalseEdge    = nullptr;
 
             if (!currBb->hasSingleStmt())
             {
@@ -313,10 +313,10 @@ bool Compiler::optSwitchConvert(BasicBlock* firstBlock, int testsCount, ssize_t*
         lastBlock = lastBlock->Next();
     }
 
-    FlowEdge*   trueEdge   = nullptr;
-    FlowEdge*   falseEdge  = nullptr;
-    bool        isReversed = false;
-    const bool  isTest     = IsConstantTestCondBlock(lastBlock, &trueEdge, &falseEdge, &isReversed);
+    FlowEdge*  trueEdge   = nullptr;
+    FlowEdge*  falseEdge  = nullptr;
+    bool       isReversed = false;
+    const bool isTest     = IsConstantTestCondBlock(lastBlock, &trueEdge, &falseEdge, &isReversed);
     assert(isTest);
 
     // Convert firstBlock to a switch block
@@ -355,9 +355,9 @@ bool Compiler::optSwitchConvert(BasicBlock* firstBlock, int testsCount, ssize_t*
     // (We only need this if the false target is behind firstBlock,
     // but it's cheaper to just check if the false target has diverged)
     // TODO-NoFallThrough: Revisit this quirk?
-    bool skipPredRemoval = false;
-    BasicBlock* blockIfTrue = trueEdge->getDestinationBlock();
-    BasicBlock* blockIfFalse = falseEdge->getDestinationBlock();
+    bool        skipPredRemoval = false;
+    BasicBlock* blockIfTrue     = trueEdge->getDestinationBlock();
+    BasicBlock* blockIfFalse    = falseEdge->getDestinationBlock();
     if (!lastBlock->FalseTargetIs(lastBlock->Next()))
     {
         if (isReversed)
@@ -365,7 +365,7 @@ bool Compiler::optSwitchConvert(BasicBlock* firstBlock, int testsCount, ssize_t*
             assert(lastBlock->FalseTargetIs(blockIfTrue));
             fgRemoveRefPred(blockIfTrue, firstBlock);
             BasicBlock* targetBlock = blockIfTrue;
-            blockIfTrue = fgNewBBafter(BBJ_ALWAYS, firstBlock, true);
+            blockIfTrue             = fgNewBBafter(BBJ_ALWAYS, firstBlock, true);
             FlowEdge* const newEdge = fgAddRefPred(targetBlock, blockIfTrue);
             blockIfTrue->SetTargetEdge(newEdge);
             skipPredRemoval = true;
@@ -374,7 +374,7 @@ bool Compiler::optSwitchConvert(BasicBlock* firstBlock, int testsCount, ssize_t*
         {
             assert(lastBlock->FalseTargetIs(blockIfFalse));
             BasicBlock* targetBlock = blockIfFalse;
-            blockIfFalse = fgNewBBafter(BBJ_ALWAYS, firstBlock, true);
+            blockIfFalse            = fgNewBBafter(BBJ_ALWAYS, firstBlock, true);
             FlowEdge* const newEdge = fgAddRefPred(targetBlock, blockIfFalse);
             blockIfFalse->SetTargetEdge(newEdge);
         }
@@ -410,12 +410,12 @@ bool Compiler::optSwitchConvert(BasicBlock* firstBlock, int testsCount, ssize_t*
         const bool isTrue = (bitVector & static_cast<ssize_t>(1ULL << i)) != 0;
 
         FlowEdge* const newEdge = fgAddRefPred((isTrue ? blockIfTrue : blockIfFalse), firstBlock);
-        jmpTab[i] = newEdge;
+        jmpTab[i]               = newEdge;
     }
 
     // Link the 'default' case
     FlowEdge* const defaultEdge = fgAddRefPred(blockIfFalse, firstBlock);
-    jmpTab[jumpCount] = defaultEdge;
+    jmpTab[jumpCount]           = defaultEdge;
 
     return true;
 }

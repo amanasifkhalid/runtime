@@ -477,9 +477,9 @@ void Compiler::fgReplaceEhfSuccessor(BasicBlock* block, BasicBlock* oldSucc, Bas
     assert(block->KindIs(BBJ_EHFINALLYRET));
     assert(fgPredsComputed);
 
-    BBehfDesc* const   ehfDesc   = block->GetEhfTargets();
-    const unsigned     succCount = ehfDesc->bbeCount;
-    FlowEdge** const   succTab   = ehfDesc->bbeSuccs;
+    BBehfDesc* const ehfDesc   = block->GetEhfTargets();
+    const unsigned   succCount = ehfDesc->bbeCount;
+    FlowEdge** const succTab   = ehfDesc->bbeSuccs;
 
     // Walk the successor table looking for the old successor, which we expect to find.
     unsigned oldSuccNum = UINT_MAX;
@@ -671,9 +671,9 @@ void Compiler::fgReplaceJumpTarget(BasicBlock* block, BasicBlock* oldTarget, Bas
 
         case BBJ_SWITCH:
         {
-            unsigned const     jumpCnt = block->GetSwitchTargets()->bbsCount;
-            FlowEdge** const   jumpTab = block->GetSwitchTargets()->bbsDstTab;
-            bool               changed = false;
+            unsigned const   jumpCnt = block->GetSwitchTargets()->bbsCount;
+            FlowEdge** const jumpTab = block->GetSwitchTargets()->bbsDstTab;
+            bool             changed = false;
 
             for (unsigned i = 0; i < jumpCnt; i++)
             {
@@ -682,7 +682,7 @@ void Compiler::fgReplaceJumpTarget(BasicBlock* block, BasicBlock* oldTarget, Bas
                     changed                 = true;
                     FlowEdge* const oldEdge = fgRemoveRefPred(oldTarget, block);
                     FlowEdge* const newEdge = fgAddRefPred(newTarget, block, oldEdge);
-                    jumpTab[i] = newEdge;
+                    jumpTab[i]              = newEdge;
 
                     // Handle the profile update, once we get our hands on the old edge.
                     // (see notes in fgChangeSwitchBlock for why this extra step is necessary)
@@ -2911,8 +2911,8 @@ void Compiler::fgLinkBasicBlocks()
             {
                 BasicBlock* const trueTarget  = fgLookupBB(curBBdesc->GetTargetOffs());
                 BasicBlock* const falseTarget = curBBdesc->Next();
-                FlowEdge* const trueEdge = fgAddRefPred<initializingPreds>(trueTarget, curBBdesc);
-                FlowEdge* const falseEdge = fgAddRefPred<initializingPreds>(falseTarget, curBBdesc);
+                FlowEdge* const   trueEdge    = fgAddRefPred<initializingPreds>(trueTarget, curBBdesc);
+                FlowEdge* const   falseEdge   = fgAddRefPred<initializingPreds>(falseTarget, curBBdesc);
                 curBBdesc->SetTrueEdge(trueEdge);
                 curBBdesc->SetFalseEdge(falseEdge);
 
@@ -2966,14 +2966,14 @@ void Compiler::fgLinkBasicBlocks()
 
             case BBJ_SWITCH:
             {
-                unsigned     jumpCnt = curBBdesc->GetSwitchTargets()->bbsCount;
-                FlowEdge**   jumpPtr = curBBdesc->GetSwitchTargets()->bbsDstTab;
+                unsigned   jumpCnt = curBBdesc->GetSwitchTargets()->bbsCount;
+                FlowEdge** jumpPtr = curBBdesc->GetSwitchTargets()->bbsDstTab;
 
                 do
                 {
-                    BasicBlock* jumpDest = fgLookupBB((unsigned)*(size_t*)jumpPtr);
-                    FlowEdge* const newEdge = fgAddRefPred<initializingPreds>(jumpDest, curBBdesc);
-                    *jumpPtr             = newEdge;
+                    BasicBlock*     jumpDest = fgLookupBB((unsigned)*(size_t*)jumpPtr);
+                    FlowEdge* const newEdge  = fgAddRefPred<initializingPreds>(jumpDest, curBBdesc);
+                    *jumpPtr                 = newEdge;
                     if (jumpDest->bbNum <= curBBdesc->bbNum)
                     {
                         fgMarkBackwardJump(jumpDest, curBBdesc);
@@ -4759,11 +4759,10 @@ BasicBlock* Compiler::fgSplitBlockAtEnd(BasicBlock* curr)
     // Remove flags from the old block that are no longer possible.
     curr->RemoveFlags(BBF_HAS_JMP | BBF_RETLESS_CALL);
 
-
     // Default to fallthrough, and add the arc for that.
     FlowEdge* const newEdge = fgAddRefPred(newBlock, curr);
     newEdge->setLikelihood(1.0);
-    
+
     // Transfer the kind and target. Do this after the code above, to avoid null-ing out the old targets used by the
     // above code (and so newBlock->bbNext is valid, so SetCond() can initialize bbFalseTarget if newBlock is a
     // BBJ_COND).
@@ -5397,8 +5396,8 @@ BasicBlock* Compiler::fgConnectFallThrough(BasicBlock* bSrc, BasicBlock* bDst)
     if (bSrc->KindIs(BBJ_COND) && bSrc->FalseTargetIs(bDst) && !bSrc->NextIs(bDst))
     {
         // Add a new block after bSrc which jumps to 'bDst'
-        jmpBlk = fgNewBBafter(BBJ_ALWAYS, bSrc, true);
-        FlowEdge* const newEdge = fgAddRefPred(jmpBlk, bSrc, bSrc->GetFalseEdge());
+        jmpBlk                    = fgNewBBafter(BBJ_ALWAYS, bSrc, true);
+        FlowEdge* const newEdge   = fgAddRefPred(jmpBlk, bSrc, bSrc->GetFalseEdge());
         FlowEdge* const edgeToDst = bSrc->GetFalseEdge();
         bSrc->SetFalseEdge(newEdge);
 
@@ -6003,9 +6002,7 @@ DONE:
  * Insert a BasicBlock before the given block.
  */
 
-BasicBlock* Compiler::fgNewBBbefore(BBKinds     jumpKind,
-                                    BasicBlock* block,
-                                    bool        extendRegion)
+BasicBlock* Compiler::fgNewBBbefore(BBKinds jumpKind, BasicBlock* block, bool extendRegion)
 {
     // Create a new BasicBlock and chain it in
 
@@ -6044,9 +6041,7 @@ BasicBlock* Compiler::fgNewBBbefore(BBKinds     jumpKind,
  * Insert a BasicBlock after the given block.
  */
 
-BasicBlock* Compiler::fgNewBBafter(BBKinds     jumpKind,
-                                   BasicBlock* block,
-                                   bool        extendRegion)
+BasicBlock* Compiler::fgNewBBafter(BBKinds jumpKind, BasicBlock* block, bool extendRegion)
 {
     // Create a new BasicBlock and chain it in
 
@@ -6098,11 +6093,8 @@ BasicBlock* Compiler::fgNewBBafter(BBKinds     jumpKind,
 // Notes:
 //    The new block will have BBF_INTERNAL flag and EH region will be extended
 //
-BasicBlock* Compiler::fgNewBBFromTreeAfter(BBKinds     jumpKind,
-                                           BasicBlock* block,
-                                           GenTree*    tree,
-                                           DebugInfo&  debugInfo,
-                                           bool        updateSideEffects /* = false */)
+BasicBlock* Compiler::fgNewBBFromTreeAfter(
+    BBKinds jumpKind, BasicBlock* block, GenTree* tree, DebugInfo& debugInfo, bool updateSideEffects /* = false */)
 {
     BasicBlock* newBlock = fgNewBBafter(jumpKind, block, true);
     newBlock->SetFlags(BBF_INTERNAL);

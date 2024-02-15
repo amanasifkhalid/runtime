@@ -1280,7 +1280,7 @@ void OptBoolsDsc::optOptimizeBoolsUpdateTrees()
             m_comp->fgRemoveRefPred(m_b1->GetTrueTarget(), m_b1);
 
             FlowEdge* const newEdge = m_comp->fgAddRefPred(m_b2->GetTrueTarget(), m_b1);
-            
+
             m_b1->SetTrueEdge(newEdge);
         }
 

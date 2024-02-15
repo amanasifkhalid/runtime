@@ -266,7 +266,7 @@ BasicBlock* Compiler::fgCreateGCPoll(GCPollType pollType, BasicBlock* block)
         // I want to create:
         // top -> poll -> bottom (lexically)
         // so that we jump over poll to get to bottom.
-        BasicBlock* top         = block;
+        BasicBlock* top = block;
 
         BasicBlock* poll = fgNewBBafter(BBJ_ALWAYS, top, true);
         bottom           = fgNewBBafter(top->GetKind(), poll, true);
@@ -359,8 +359,8 @@ BasicBlock* Compiler::fgCreateGCPoll(GCPollType pollType, BasicBlock* block)
 #endif
 
         // Bottom has Top and Poll as its predecessors.  Poll has just Top as a predecessor.
-        FlowEdge* const trueEdge = fgAddRefPred(bottom, top);
-        FlowEdge* const falseEdge = fgAddRefPred(poll, top);
+        FlowEdge* const trueEdge         = fgAddRefPred(bottom, top);
+        FlowEdge* const falseEdge        = fgAddRefPred(poll, top);
         FlowEdge* const pollToBottomEdge = fgAddRefPred(bottom, poll);
 
         poll->SetTargetEdge(pollToBottomEdge);
@@ -2763,8 +2763,8 @@ void Compiler::fgInsertFuncletPrologBlock(BasicBlock* block)
     newHead->bbRefs = 0;
 
     fgInsertBBbefore(block, newHead); // insert the new block in the block list
-    fgExtendEHRegionBefore(block); // Update the EH table to make the prolog block the first block in the block's EH
-                                   // block.
+    fgExtendEHRegionBefore(block);    // Update the EH table to make the prolog block the first block in the block's EH
+                                      // block.
 
     // Distribute the pred list between newHead and block. Incoming edges coming from outside
     // the handler go to the prolog. Edges coming from with the handler are back-edges, and
@@ -2800,7 +2800,7 @@ void Compiler::fgInsertFuncletPrologBlock(BasicBlock* block)
     assert(fgGetPredForBlock(block, newHead) == nullptr);
     FlowEdge* const newEdge = fgAddRefPred(block, newHead);
     newHead->SetKindAndTargetEdge(BBJ_ALWAYS, newEdge);
-    
+
     assert(newHead->JumpsToNext());
     assert(newHead->HasFlag(BBF_INTERNAL));
 }
@@ -5605,7 +5605,7 @@ void FlowGraphNaturalLoop::Duplicate(BasicBlock** insertAfter, BlockToBlockMap* 
     VisitLoopBlocks([=](BasicBlock* blk) {
         // Find copy of blk in map (this mapping should have been created above)
         BasicBlock* newBlk;
-        const bool foundMapping = map->Lookup(blk, &newBlk);
+        const bool  foundMapping = map->Lookup(blk, &newBlk);
         assert(foundMapping);
 
         // Successor should not be set yet

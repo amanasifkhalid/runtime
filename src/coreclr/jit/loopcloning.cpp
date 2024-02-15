@@ -1962,8 +1962,7 @@ void Compiler::optCloneLoop(FlowGraphNaturalLoop* loop, LoopCloneContext* contex
     // Make a new pre-header block for the fast loop.
     JITDUMP("Create new preheader block for fast loop\n");
 
-    BasicBlock* fastPreheader =
-        fgNewBBafter(BBJ_ALWAYS, preheader, /*extendRegion*/ true);
+    BasicBlock* fastPreheader = fgNewBBafter(BBJ_ALWAYS, preheader, /*extendRegion*/ true);
     JITDUMP("Adding " FMT_BB " after " FMT_BB "\n", fastPreheader->bbNum, preheader->bbNum);
     fastPreheader->bbWeight = fastPreheader->isRunRarely() ? BB_ZERO_WEIGHT : ambientWeight;
 

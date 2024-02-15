@@ -13374,10 +13374,10 @@ Compiler::FoldResult Compiler::fgFoldConditional(BasicBlock* block)
             // modify the flow graph
 
             // Find the actual jump target
-            size_t       switchVal = (size_t)cond->AsIntCon()->gtIconVal;
-            unsigned     jumpCnt   = block->GetSwitchTargets()->bbsCount;
-            FlowEdge**   jumpTab   = block->GetSwitchTargets()->bbsDstTab;
-            bool         foundVal  = false;
+            size_t     switchVal = (size_t)cond->AsIntCon()->gtIconVal;
+            unsigned   jumpCnt   = block->GetSwitchTargets()->bbsCount;
+            FlowEdge** jumpTab   = block->GetSwitchTargets()->bbsDstTab;
+            bool       foundVal  = false;
 
             for (unsigned val = 0; val < jumpCnt; val++, jumpTab++)
             {
@@ -14656,19 +14656,19 @@ bool Compiler::fgExpandQmarkForCastInstOf(BasicBlock* block, Statement* stmt)
     assert(block->KindIs(BBJ_ALWAYS));
     FlowEdge* const blockToAsgBlockEdge = fgAddRefPred(asgBlock, block);
     block->SetTargetEdge(blockToAsgBlockEdge);
-    
+
     FlowEdge* const asgToCond1Edge = fgAddRefPred(cond1Block, asgBlock);
     asgBlock->SetTargetEdge(asgToCond1Edge);
-    
+
     FlowEdge* const helperToRemainderEdge = fgAddRefPred(remainderBlock, helperBlock);
     helperBlock->SetTargetEdge(helperToRemainderEdge);
 
-    FlowEdge* const cond1TrueEdge = fgAddRefPred(remainderBlock, cond1Block);
+    FlowEdge* const cond1TrueEdge  = fgAddRefPred(remainderBlock, cond1Block);
     FlowEdge* const cond1FalseEdge = fgAddRefPred(cond2Block, cond1Block);
     cond1Block->SetTrueEdge(cond1TrueEdge);
     cond1Block->SetFalseEdge(cond1FalseEdge);
 
-    FlowEdge* const cond2TrueEdge = fgAddRefPred(remainderBlock, cond2Block);
+    FlowEdge* const cond2TrueEdge  = fgAddRefPred(remainderBlock, cond2Block);
     FlowEdge* const cond2FalseEdge = fgAddRefPred(helperBlock, cond2Block);
     cond2Block->SetTrueEdge(cond2TrueEdge);
     cond2Block->SetFalseEdge(cond2FalseEdge);

@@ -692,11 +692,11 @@ private:
 
     /* The following union describes the jump target(s) of this block */
     union {
-        unsigned    bbTargetOffs; // PC offset (temporary only)
-        FlowEdge*   bbTargetEdge; // edge to target block
-        FlowEdge*   bbTrueEdge;   // BBJ_COND jump target edge when its condition is true (alias for bbTargetEdge)
-        BBswtDesc*  bbSwtTargets; // switch descriptor
-        BBehfDesc*  bbEhfTargets; // BBJ_EHFINALLYRET descriptor
+        unsigned   bbTargetOffs; // PC offset (temporary only)
+        FlowEdge*  bbTargetEdge; // edge to target block
+        FlowEdge*  bbTrueEdge;   // BBJ_COND jump target edge when its condition is true (alias for bbTargetEdge)
+        BBswtDesc* bbSwtTargets; // switch descriptor
+        BBehfDesc* bbEhfTargets; // BBJ_EHFINALLYRET descriptor
     };
 
     // Edge to the successor of a BBJ_COND block if bbTrueEdge is not taken
@@ -825,7 +825,7 @@ public:
         assert(bbTrueEdge->getDestinationBlock() != nullptr);
         return bbTrueEdge;
     }
-    
+
     BasicBlock* GetTrueTarget() const
     {
         return GetTrueEdge()->getDestinationBlock();
@@ -893,7 +893,7 @@ public:
     // block kinds that don't use `bbTargetEdge`.
     void SetKindAndTargetEdge(BBKinds kind, FlowEdge* targetEdge = nullptr)
     {
-        bbKind   = kind;
+        bbKind       = kind;
         bbTargetEdge = targetEdge;
 
         // If bbKind indicates this block has a jump, bbTargetEdge cannot be null.
@@ -2017,8 +2017,8 @@ public:
 //
 struct BBswtDesc
 {
-    FlowEdge**   bbsDstTab; // case label table address
-    unsigned     bbsCount;  // count of cases (includes 'default' if bbsHasDefault)
+    FlowEdge** bbsDstTab; // case label table address
+    unsigned   bbsCount;  // count of cases (includes 'default' if bbsHasDefault)
 
     // Case number and likelihood of most likely case
     // (only known with PGO, only valid if bbsHasDominantCase is true)

@@ -658,8 +658,8 @@ void BasicBlock::dspKind() const
             }
             else
             {
-                const unsigned     jumpCnt = bbEhfTargets->bbeCount;
-                FlowEdge** const   jumpTab = bbEhfTargets->bbeSuccs;
+                const unsigned   jumpCnt = bbEhfTargets->bbeCount;
+                FlowEdge** const jumpTab = bbEhfTargets->bbeSuccs;
 
                 for (unsigned i = 0; i < jumpCnt; i++)
                 {
@@ -722,8 +722,8 @@ void BasicBlock::dspKind() const
         {
             printf(" ->");
 
-            const unsigned     jumpCnt = bbSwtTargets->bbsCount;
-            FlowEdge** const   jumpTab = bbSwtTargets->bbsDstTab;
+            const unsigned   jumpCnt = bbSwtTargets->bbsCount;
+            FlowEdge** const jumpTab = bbSwtTargets->bbsDstTab;
 
             for (unsigned i = 0; i < jumpCnt; i++)
             {

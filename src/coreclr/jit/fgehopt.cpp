@@ -1137,7 +1137,7 @@ PhaseStatus Compiler::fgCloneFinally()
                     // Ref count updates.
                     fgRemoveRefPred(firstBlock, currentBlock);
                     FlowEdge* const newEdge = fgAddRefPred(firstCloneBlock, currentBlock);
-                    
+
                     // This call returns to the expected spot, so retarget it to branch to the clone.
                     currentBlock->SetKindAndTargetEdge(BBJ_ALWAYS, newEdge);
                     currentBlock->RemoveFlags(BBF_RETLESS_CALL); // no longer a BBJ_CALLFINALLY

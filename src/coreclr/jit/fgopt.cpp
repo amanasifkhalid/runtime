@@ -1291,7 +1291,7 @@ void Compiler::fgCompactBlocks(BasicBlock* block, BasicBlock* bNext)
             /* Update the predecessor list for 'bNext->bbTarget' */
             FlowEdge* const targetEdge = bNext->GetTargetEdge();
             fgReplacePred(targetEdge->getDestinationBlock(), bNext, block);
-            
+
             block->SetKindAndTargetEdge(bNext->GetKind(), targetEdge);
             break;
         }
@@ -1299,7 +1299,7 @@ void Compiler::fgCompactBlocks(BasicBlock* block, BasicBlock* bNext)
         case BBJ_COND:
         {
             /* Update the predecessor list for 'bNext->bbTrueTarget' */
-            FlowEdge* const trueEdge = bNext->GetTrueEdge();
+            FlowEdge* const trueEdge  = bNext->GetTrueEdge();
             FlowEdge* const falseEdge = bNext->GetFalseEdge();
             fgReplacePred(trueEdge->getDestinationBlock(), bNext, block);
 
@@ -1815,11 +1815,11 @@ bool Compiler::fgOptimizeSwitchBranches(BasicBlock* block)
 {
     assert(block->KindIs(BBJ_SWITCH));
 
-    unsigned     jmpCnt = block->GetSwitchTargets()->bbsCount;
-    FlowEdge**   jmpTab = block->GetSwitchTargets()->bbsDstTab;
-    BasicBlock*  bNewDest; // the new jump target for the current switch case
-    BasicBlock*  bDest;
-    bool         returnvalue = false;
+    unsigned    jmpCnt = block->GetSwitchTargets()->bbsCount;
+    FlowEdge**  jmpTab = block->GetSwitchTargets()->bbsDstTab;
+    BasicBlock* bNewDest; // the new jump target for the current switch case
+    BasicBlock* bDest;
+    bool        returnvalue = false;
 
     do
     {
@@ -1881,7 +1881,7 @@ bool Compiler::fgOptimizeSwitchBranches(BasicBlock* block)
 
             // Update the switch jump table (this has to happen before calling UpdateSwitchTableTarget)
             FlowEdge* const newEdge = fgAddRefPred(bNewDest, block, fgRemoveRefPred(bDest, block));
-            *jmpTab = newEdge;
+            *jmpTab                 = newEdge;
 
             // Maintain, if necessary, the set of unique targets of "block."
             UpdateSwitchTableTarget(block, bDest, bNewDest);
@@ -2011,7 +2011,8 @@ bool Compiler::fgOptimizeSwitchBranches(BasicBlock* block)
 
         return true;
     }
-    else if ((block->GetSwitchTargets()->bbsCount == 2) && block->NextIs(block->GetSwitchTargets()->bbsDstTab[1]->getDestinationBlock()))
+    else if ((block->GetSwitchTargets()->bbsCount == 2) &&
+             block->NextIs(block->GetSwitchTargets()->bbsDstTab[1]->getDestinationBlock()))
     {
         /* Use a BBJ_COND(switchVal==0) for a switch with only one
            significant clause besides the default clause, if the
@@ -2476,7 +2477,7 @@ bool Compiler::fgOptimizeUncondBranchToSimpleCond(BasicBlock* block, BasicBlock*
     //
     assert(!target->IsLast());
     BasicBlock* next = fgNewBBafter(BBJ_ALWAYS, block, true);
-    
+
     // The new block 'next' will inherit its weight from 'block'
     //
     next->inheritWeight(block);
@@ -2484,10 +2485,10 @@ bool Compiler::fgOptimizeUncondBranchToSimpleCond(BasicBlock* block, BasicBlock*
     // Fix up block's flow
     //
     fgRemoveRefPred(target, block);
-    FlowEdge* const trueEdge = fgAddRefPred(target->GetTrueTarget(), block);
+    FlowEdge* const trueEdge  = fgAddRefPred(target->GetTrueTarget(), block);
     FlowEdge* const falseEdge = fgAddRefPred(next, block);
     block->SetCond(trueEdge, falseEdge);
-    
+
     FlowEdge* const nextEdge = fgAddRefPred(target->GetFalseTarget(), next);
     next->SetTargetEdge(nextEdge);
 
@@ -4988,7 +4989,7 @@ bool Compiler::fgUpdateFlowGraph(bool doTailDuplication /* = false */, bool isPh
                             if (bDest->KindIs(BBJ_COND) && !bDest->NextIs(bDest->GetFalseTarget()))
                             {
                                 BasicBlock* const bDestFalseTarget = bDest->GetFalseTarget();
-                                BasicBlock* const bFixup = fgNewBBafter(BBJ_ALWAYS, bDest, true);
+                                BasicBlock* const bFixup           = fgNewBBafter(BBJ_ALWAYS, bDest, true);
                                 bFixup->inheritWeight(bDestFalseTarget);
 
                                 fgRemoveRefPred(bDestFalseTarget, bDest);
@@ -5022,7 +5023,8 @@ bool Compiler::fgUpdateFlowGraph(bool doTailDuplication /* = false */, bool isPh
 
                         // Optimize the Conditional JUMP to go to the new target
                         block->SetFalseEdge(block->GetTrueEdge());
-                        FlowEdge* const newEdge = fgAddRefPred(bNext->GetTarget(), block, fgRemoveRefPred(bNext->GetTarget(), bNext));
+                        FlowEdge* const newEdge =
+                            fgAddRefPred(bNext->GetTarget(), block, fgRemoveRefPred(bNext->GetTarget(), bNext));
                         block->SetTrueEdge(newEdge);
 
                         /*
@@ -5672,9 +5674,9 @@ PhaseStatus Compiler::fgHeadTailMerge(bool early)
                 {
                     fgRemoveRefPred(commSucc, predBlock);
                 }
-                
+
                 FlowEdge* const newEdge = fgAddRefPred(crossJumpTarget, predBlock);
-                
+
                 predBlock->SetKindAndTargetEdge(BBJ_ALWAYS, newEdge);
             }
 

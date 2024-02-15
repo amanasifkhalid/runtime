@@ -592,7 +592,7 @@ void Compiler::optRedirectBlock(BasicBlock* blk, BasicBlock* newBlk, BlockToBloc
         case BBJ_LEAVE:
         {
             BasicBlock* currTarget = blk->GetTarget();
-            FlowEdge* newEdge;
+            FlowEdge*   newEdge;
 
             // Determine if newBlk should be redirected to a different target from blk's target
             if (redirectMap->Lookup(currTarget, &newTarget))
@@ -614,8 +614,8 @@ void Compiler::optRedirectBlock(BasicBlock* blk, BasicBlock* newBlk, BlockToBloc
         {
             BasicBlock* currTrueTarget  = blk->GetTrueTarget();
             BasicBlock* currFalseTarget = blk->GetFalseTarget();
-            FlowEdge* trueEdge;
-            FlowEdge* falseEdge;
+            FlowEdge*   trueEdge;
+            FlowEdge*   falseEdge;
 
             // Determine if newBLk should be redirected to a different true target from blk's true target
             if (redirectMap->Lookup(currTrueTarget, &newTarget))
@@ -646,9 +646,9 @@ void Compiler::optRedirectBlock(BasicBlock* blk, BasicBlock* newBlk, BlockToBloc
         case BBJ_EHFINALLYRET:
         {
             BBehfDesc* currEhfDesc = blk->GetEhfTargets();
-            BBehfDesc* newEhfDesc = new (this, CMK_BasicBlock) BBehfDesc;
-            newEhfDesc->bbeCount = currEhfDesc->bbeCount;
-            FlowEdge** jumpTable = new (this, CMK_FlowEdge) FlowEdge*[newEhfDesc->bbeCount];
+            BBehfDesc* newEhfDesc  = new (this, CMK_BasicBlock) BBehfDesc;
+            newEhfDesc->bbeCount   = currEhfDesc->bbeCount;
+            FlowEdge** jumpTable   = new (this, CMK_FlowEdge) FlowEdge*[newEhfDesc->bbeCount];
 
             for (BasicBlock* const ehfTarget : blk->EHFinallyRetSuccs())
             {
@@ -676,9 +676,9 @@ void Compiler::optRedirectBlock(BasicBlock* blk, BasicBlock* newBlk, BlockToBloc
         case BBJ_SWITCH:
         {
             BBswtDesc* currSwtDesc = blk->GetSwitchTargets();
-            BBswtDesc* newSwtDesc = new (this, CMK_BasicBlock) BBswtDesc(currSwtDesc);
-            newSwtDesc->bbsDstTab = new (this, CMK_FlowEdge) FlowEdge*[newSwtDesc->bbsCount];
-            FlowEdge** jumpPtr = newSwtDesc->bbsDstTab;
+            BBswtDesc* newSwtDesc  = new (this, CMK_BasicBlock) BBswtDesc(currSwtDesc);
+            newSwtDesc->bbsDstTab  = new (this, CMK_FlowEdge) FlowEdge*[newSwtDesc->bbsCount];
+            FlowEdge** jumpPtr     = newSwtDesc->bbsDstTab;
 
             for (BasicBlock* const switchTarget : blk->SwitchTargets())
             {
@@ -2186,7 +2186,7 @@ bool Compiler::optInvertWhileLoop(BasicBlock* block)
 
     // Update pred info
     //
-    FlowEdge* const trueEdge = fgAddRefPred(bJoin, bNewCond);
+    FlowEdge* const trueEdge  = fgAddRefPred(bJoin, bNewCond);
     FlowEdge* const falseEdge = fgAddRefPred(bTop, bNewCond);
     bNewCond->SetTrueEdge(trueEdge);
     bNewCond->SetFalseEdge(falseEdge);
@@ -2221,7 +2221,7 @@ bool Compiler::optInvertWhileLoop(BasicBlock* block)
         // Redirect the predecessor to the new block.
         JITDUMP("Redirecting non-loop " FMT_BB " -> " FMT_BB " to " FMT_BB " -> " FMT_BB "\n", predBlock->bbNum,
                 bTest->bbNum, predBlock->bbNum, bNewCond->bbNum);
-        
+
         switch (predBlock->GetKind())
         {
             case BBJ_ALWAYS:

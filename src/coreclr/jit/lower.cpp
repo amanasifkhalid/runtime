@@ -962,7 +962,7 @@ GenTree* Lowering::LowerSwitch(GenTree* node)
     // Fix the pred for the default case: the default block target still has originalSwitchBB
     // as a predecessor, but the fgSplitBlockAfterStatement() moved all predecessors to point
     // to afterDefaultCondBlock.
-    FlowEdge* const oldEdge = comp->fgRemoveRefPred(defaultBB, afterDefaultCondBlock);
+    FlowEdge* const oldEdge  = comp->fgRemoveRefPred(defaultBB, afterDefaultCondBlock);
     FlowEdge* const trueEdge = comp->fgAddRefPred(defaultBB, originalSwitchBB, oldEdge);
 
     // Turn originalSwitchBB into a BBJ_COND.
@@ -1311,7 +1311,7 @@ bool Lowering::TryLowerSwitchToBitTest(
     GenCondition bbSwitchCondition;
     comp->fgRemoveAllRefPreds(bbCase1, bbSwitch);
     comp->fgRemoveAllRefPreds(bbCase0, bbSwitch);
-    
+
     FlowEdge* const edgeToCase0 = comp->fgAddRefPred(bbCase0, bbSwitch);
     FlowEdge* const edgeToCase1 = comp->fgAddRefPred(bbCase1, bbSwitch);
 

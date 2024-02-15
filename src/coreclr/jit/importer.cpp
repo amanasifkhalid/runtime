@@ -4730,8 +4730,7 @@ void Compiler::impImportLeave(BasicBlock* block)
                     (HBtab->ebdEnclosingTryIndex == EHblkDsc::NO_ENCLOSING_INDEX) ? 0 : HBtab->ebdEnclosingTryIndex + 1;
                 unsigned callFinallyHndIndex =
                     (HBtab->ebdEnclosingHndIndex == EHblkDsc::NO_ENCLOSING_INDEX) ? 0 : HBtab->ebdEnclosingHndIndex + 1;
-                callBlock =
-                    fgNewBBinRegion(BBJ_CALLFINALLY, callFinallyTryIndex, callFinallyHndIndex, block);
+                callBlock = fgNewBBinRegion(BBJ_CALLFINALLY, callFinallyTryIndex, callFinallyHndIndex, block);
 
                 // Convert the BBJ_LEAVE to BBJ_ALWAYS, jumping to the new BBJ_CALLFINALLY. This is because
                 // the new BBJ_CALLFINALLY is in a different EH region, thus it can't just replace the BBJ_LEAVE,
@@ -4762,8 +4761,8 @@ void Compiler::impImportLeave(BasicBlock* block)
                 assert(callBlock->HasInitializedTarget());
                 fgRemoveRefPred(callBlock->GetTarget(), callBlock);
 
-                // callBlock will call the finally handler. Conversion to BBJ_CALLFINALLY happens later,
-                // once we have the new successor edge.
+// callBlock will call the finally handler. Conversion to BBJ_CALLFINALLY happens later,
+// once we have the new successor edge.
 
 #ifdef DEBUG
                 if (verbose)
@@ -4843,8 +4842,7 @@ void Compiler::impImportLeave(BasicBlock* block)
                 assert((step == block) || !step->HasInitializedTarget());
 
                 // callBlock will call the finally handler, once we have the new successor edge
-                callBlock =
-                    fgNewBBinRegion(BBJ_CALLFINALLY, callFinallyTryIndex, callFinallyHndIndex, step);
+                callBlock = fgNewBBinRegion(BBJ_CALLFINALLY, callFinallyTryIndex, callFinallyHndIndex, step);
                 if (step == block)
                 {
                     fgRemoveRefPred(step->GetTarget(), step);
@@ -7674,10 +7672,10 @@ void Compiler::impImportBlockCode(BasicBlock* block)
                 if (opts.OptimizationEnabled() && (op1->gtOper == GT_CNS_INT))
                 {
                     // Find the jump target
-                    size_t       switchVal = (size_t)op1->AsIntCon()->gtIconVal;
-                    unsigned     jumpCnt   = block->GetSwitchTargets()->bbsCount;
-                    FlowEdge**   jumpTab   = block->GetSwitchTargets()->bbsDstTab;
-                    bool         foundVal  = false;
+                    size_t     switchVal = (size_t)op1->AsIntCon()->gtIconVal;
+                    unsigned   jumpCnt   = block->GetSwitchTargets()->bbsCount;
+                    FlowEdge** jumpTab   = block->GetSwitchTargets()->bbsDstTab;
+                    bool       foundVal  = false;
 
                     for (unsigned val = 0; val < jumpCnt; val++, jumpTab++)
                     {
