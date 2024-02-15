@@ -553,170 +553,163 @@ void Compiler::optCheckPreds()
 #endif // DEBUG
 
 //------------------------------------------------------------------------
-// optRedirectBlock: Replace the branch successors of a block based on a block map.
+// optRedirectBlock: Initialize the branch successors of a block based on a block map.
 //
-// Updates the successors of `blk`: if `blk2` is a branch successor of `blk`, and there is a mapping
-// for `blk2->blk3` in `redirectMap`, change `blk` so that `blk3` is this branch successor.
+// Updates the successors of `newBlk`, a copy of `blk`:
+// If `blk2` is a branch successor of `blk`, and there is a mapping
+// for `blk2->blk3` in `redirectMap`, make `blk3` a successor of `newBlk`.
+// Else, make `blk2` a successor of `newBlk`.
 //
 // Arguments:
-//     blk          - block to redirect
-//     redirectMap  - block->block map specifying how the `blk` target will be redirected.
-//     predOption   - specifies how to update the pred lists
+//     blk          - the original block, which doesn't need redirecting
+//     newBlk       - copy of blk, with uninitialized successors
+//     redirectMap  - block->block map specifying how to redirect the target of `blk`.
 //
 // Notes:
-//     Pred lists for successors of `blk` may be changed, depending on `predOption`.
+//     Initially, `newBlk` should not have any successors set.
+//     Upon returning, `newBlk` should have all of its successors initialized.
+//     `blk` must have its successors set upon entry; these won't be changed.
 //
-void Compiler::optRedirectBlock(BasicBlock* blk, BlockToBlockMap* redirectMap, RedirectBlockOption predOption)
+void Compiler::optRedirectBlock(BasicBlock* blk, BasicBlock* newBlk, BlockToBlockMap* redirectMap)
 {
-    const bool updatePreds = (predOption == RedirectBlockOption::UpdatePredLists);
-    const bool addPreds    = (predOption == RedirectBlockOption::AddToPredLists);
+    // Caller should not have initialized newBlk's target yet
+    assert(newBlk->KindIs(BBJ_ALWAYS));
+    assert(!newBlk->HasInitializedTarget());
 
-    BasicBlock* newJumpDest = nullptr;
+    BasicBlock* newTarget;
 
+    // Set the successor edges of "newBlk".
+    // For each successor, use "blockMap" to determine if the successor needs to be redirected.
     switch (blk->GetKind())
     {
-        case BBJ_THROW:
-        case BBJ_RETURN:
-        case BBJ_EHFILTERRET:
-        case BBJ_EHFAULTRET:
-        case BBJ_EHCATCHRET:
-            // These have no jump destination to update.
-            break;
-
-        case BBJ_CALLFINALLY:
-            if (addPreds && blk->bbFallsThrough())
-            {
-                fgAddRefPred(blk->Next(), blk);
-            }
+        case BBJ_ALWAYS:
+            // Copy BBF_NONE_QUIRK flag for BBJ_ALWAYS blocks only
+            newBlk->CopyFlags(blk, BBF_NONE_QUIRK);
 
             FALLTHROUGH;
-        case BBJ_ALWAYS:
-        case BBJ_LEAVE:
+        case BBJ_CALLFINALLY:
         case BBJ_CALLFINALLYRET:
-            // All of these have a single jump destination to update.
-            if (redirectMap->Lookup(blk->GetTarget(), &newJumpDest))
+        case BBJ_LEAVE:
+        {
+            BasicBlock* currTarget = blk->GetTarget();
+            FlowEdge* const newEdge;
+
+            // Determine if newBlk should be redirected to a different target from blk's target
+            if (redirectMap->Lookup(currTarget, &newTarget))
             {
-                if (updatePreds)
-                {
-                    fgRemoveRefPred(blk->GetTarget(), blk);
-                }
-                if (updatePreds || addPreds)
-                {
-                    FlowEdge* const newEdge = fgAddRefPred(newJumpDest, blk);
-                    blk->SetTargetEdge(newEdge);
-                }
+                // newBlk needs to be redirected to a different target
+                newEdge = fgAddRefPred(newTarget, newBlk);
             }
-            else if (addPreds)
+            else
             {
-                fgAddRefPred(blk->GetTarget(), blk);
+                // newBlk uses the same target as blk
+                newEdge = fgAddRefPred(currTarget, newBlk);
             }
+
+            newBlk->SetKindAndTargetEdge(blk->GetKind, newEdge);
             break;
+        }
 
         case BBJ_COND:
-            // Update jump taken when condition is true
-            if (redirectMap->Lookup(blk->GetTrueTarget(), &newJumpDest))
+        {
+            BasicBlock* currTrueTarget  = blk->GetTrueTarget();
+            BasicBlock* currFalseTarget = blk->GetFalseTarget();
+            FlowEdge* const trueEdge;
+            FlowEdge* const falseEdge;
+
+            // Determine if newBLk should be redirected to a different true target from blk's true target
+            if (redirectMap->Lookup(currTrueTarget, &newTarget))
             {
-                if (updatePreds)
-                {
-                    fgRemoveRefPred(blk->GetTrueTarget(), blk);
-                }
-                if (updatePreds || addPreds)
-                {
-                    FlowEdge* const newEdge = fgAddRefPred(newJumpDest, blk);
-                    blk->SetTrueEdge(newEdge);
-                }
+                // newBlk needs to be redirected to a different true target
+                trueEdge = fgAddRefPred(newTarget, newBlk);
             }
-            else if (addPreds)
+            else
             {
-                fgAddRefPred(blk->GetTrueTarget(), blk);
+                // newBlk uses the same true target as blk
+                trueEdge = fgAddRefPred(currTrueTarget, newBlk);
             }
 
-            // Update jump taken when condition is false
-            if (redirectMap->Lookup(blk->GetFalseTarget(), &newJumpDest))
+            // Do the same lookup and edge creation for the false target
+            if (redirectMap->Lookup(currFalseTarget, &newTarget))
             {
-                if (updatePreds)
-                {
-                    fgRemoveRefPred(blk->GetFalseTarget(), blk);
-                }
-                if (updatePreds || addPreds)
-                {
-                    FlowEdge* const newEdge = fgAddRefPred(newJumpDest, blk);
-                    blk->SetFalseEdge(newEdge);
-                }
+                falseEdge = fgAddRefPred(newTarget, newBlk);
             }
-            else if (addPreds)
+            else
             {
-                fgAddRefPred(blk->GetFalseTarget(), blk);
+                falseEdge = fgAddRefPred(currFalseTarget, newBlk);
             }
+
+            newBlk->SetCond(trueEdge, falseEdge);
             break;
+        }
 
         case BBJ_EHFINALLYRET:
         {
-            BBehfDesc*  ehfDesc = blk->GetEhfTargets();
-            BasicBlock* newSucc = nullptr;
-            for (unsigned i = 0; i < ehfDesc->bbeCount; i++)
+            BBehfDesc* currEhfDesc = blk->GetEhfTargets();
+            BBehfDesc* newEhfDesc = new (this, CMK_BasicBlock) BBehfDesc;
+            newEhfDesc->bbeCount = currEhfDesc->bbeCount;
+            FlowEdge** jumpTable = new (this, CMK_FlowEdge) FlowEdge*[newEhfDesc->bbeCount];
+
+            for (BasicBlock* const ehfTarget : blk->EHFinallyRetSuccs())
             {
-                BasicBlock* const succ = ehfDesc->bbeSuccs[i];
-                if (redirectMap->Lookup(succ, &newSucc))
+                FlowEdge* const newEdge;
+
+                // Determine if newBlk should target ehfTarget, or be redirected
+                if (redirectMap->Lookup(ehfTarget, &newTarget))
                 {
-                    if (updatePreds)
-                    {
-                        fgRemoveRefPred(succ, blk);
-                    }
-                    if (updatePreds || addPreds)
-                    {
-                        fgAddRefPred(newSucc, blk);
-                    }
-                    ehfDesc->bbeSuccs[i] = newSucc;
+                    newEdge = fgAddRefPred(newTarget, newBlk);
                 }
-                else if (addPreds)
+                else
                 {
-                    fgAddRefPred(succ, blk);
+                    newEdge = fgAddRefPred(ehfTarget, newBlk);
                 }
+
+                *jumpTable = newEdge;
+                jumpTable++;
             }
+
+            newEhfDesc->bbeSuccs = jumpTable;
+            newBlk->SetEhf(newEhfDesc);
+            break;
         }
-        break;
 
         case BBJ_SWITCH:
         {
-            bool redirected = false;
-            for (unsigned i = 0; i < blk->GetSwitchTargets()->bbsCount; i++)
+            BBswtDesc* currSwtDesc = blk->GetSwitchTargets();
+            BBswtDesc* newSwtDesc = new (this, CMK_BasicBlock) BBswtDesc(currSwtDesc);
+            FlowEdge** jumpTable = new (this, CMK_FlowEdge) FlowEdge*[newSwtDesc->bbsCount];
+
+            for (BasicBlock* const switchTarget : blk->SwitchTargets())
             {
-                BasicBlock* const switchDest = blk->GetSwitchTargets()->bbsDstTab[i];
-                if (redirectMap->Lookup(switchDest, &newJumpDest))
+                FlowEdge* const newEdge;
+
+                // Determine if newBlk should target switchTarget, or be redirected
+                if (redirectMap->Lookup(switchTarget, &newTarget))
                 {
-                    if (updatePreds)
-                    {
-                        fgRemoveRefPred(switchDest, blk);
-                    }
-                    if (updatePreds || addPreds)
-                    {
-                        fgAddRefPred(newJumpDest, blk);
-                    }
-                    blk->GetSwitchTargets()->bbsDstTab[i] = newJumpDest;
-                    redirected                            = true;
+                    newEdge = fgAddRefPred(newTarget, newBlk);
                 }
-                else if (addPreds)
+                else
                 {
-                    fgAddRefPred(switchDest, blk);
+                    newEdge = fgAddRefPred(switchTarget, newBlk);
                 }
+
+                *jumpTable = newEdge;
+                jumpTable++;
             }
-            // If any redirections happened, invalidate the switch table map for the switch.
-            if (redirected)
-            {
-                // Don't create a new map just to try to remove an entry.
-                BlockToSwitchDescMap* switchMap = GetSwitchDescMap(/* createIfNull */ false);
-                if (switchMap != nullptr)
-                {
-                    switchMap->Remove(blk);
-                }
-            }
+
+            newSwtDesc->bbsDstTab = jumpTable;
+            newBlk->SetSwitch(newSwtDesc);
+            break;
         }
-        break;
 
         default:
-            unreached();
+            // blk doesn't have a jump destination
+            assert(blk->NumSucc() == 0);
+            newBlk->SetKindAndTargetEdge(blk->GetKind());
+            break;
     }
+
+    assert(newBlk->KindIs(blk->GetKind()));
 }
 
 //-----------------------------------------------------------------------------

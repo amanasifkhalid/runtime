@@ -1094,12 +1094,11 @@ PhaseStatus Compiler::fgCloneFinally()
                 assert(finallyRetExpr->gtOper == GT_RETFILT);
                 fgRemoveStmt(newBlock, finallyRet);
                 FlowEdge* const newEdge = fgAddRefPred(normalCallFinallyReturn, newBlock);
-                newBlock->SetKindAndTargetEdge(BBJ_ALWAYS, newEdge);
+                newBlock->SetTargetEdge(newEdge);
             }
             else
             {
-                newBlock->CopyTarget(this, block);
-                optRedirectBlock(newBlock, &blockMap, RedirectBlockOption::AddToPredLists);
+                optRedirectBlock(block, newBlock, &blockMap);
             }
         }
 
