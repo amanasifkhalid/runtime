@@ -720,12 +720,16 @@ private:
     // Successor edge of a BBJ_COND block if bbTrueEdge is not taken
     FlowEdge* bbFalseEdge;
 
+    static BasicBlock* nextFreeBlock = nullptr;
+
 public:
     static BasicBlock* New(Compiler* compiler);
     static BasicBlock* New(Compiler* compiler, BBKinds kind);
     static BasicBlock* New(Compiler* compiler, BBehfDesc* ehfTargets);
     static BasicBlock* New(Compiler* compiler, BBswtDesc* swtTargets);
     static BasicBlock* New(Compiler* compiler, BBKinds kind, unsigned targetOffs);
+
+    static void AddToFreeList(BasicBlock* block);
 
     BBKinds GetKind() const
     {

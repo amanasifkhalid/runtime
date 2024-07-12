@@ -5419,6 +5419,8 @@ BasicBlock* Compiler::fgRemoveBlock(BasicBlock* block, bool unreachable)
         ehUpdateForDeletedBlock(block);
     }
 
+    BasicBlock::AddToFreeList(block);
+
     return bNext;
 }
 

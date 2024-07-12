@@ -1610,12 +1610,21 @@ BasicBlock* BasicBlock::New(Compiler* compiler)
     /* Allocate the block descriptor and zero it out */
     assert(compiler->fgSafeBasicBlockCreation);
 
-    block = new (compiler, CMK_BasicBlock) BasicBlock;
+    if (BasicBlock::nextFreeBlock != nullptr)
+    {
+        block = BasicBlock::nextFreeBlock;
+        BasicBlock::nextFreeBlock = BasicBlock::nextFreeBlock->Next();
+    }
+    else
+    {
+        block = new (compiler, CMK_BasicBlock) BasicBlock;
 
 #if MEASURE_BLOCK_SIZE
-    BasicBlock::s_Count += 1;
-    BasicBlock::s_Size += sizeof(*block);
+        BasicBlock::s_Count += 1;
+        BasicBlock::s_Size += sizeof(*block);
 #endif
+    }
+
 
 #ifdef DEBUG
     // fgLookupBB() is invalid until fgInitBBLookup() is called again.
@@ -1730,6 +1739,13 @@ BasicBlock* BasicBlock::New(Compiler* compiler, BBKinds kind, unsigned targetOff
     block->bbKind       = kind;
     block->bbTargetOffs = targetOffs;
     return block;
+}
+
+void BasicBlock::AddToFreeList(BasicBlock* block)
+{
+    assert(block != nullptr);
+    block->bbNext = BasicBlock::nextFreeBlock;
+    BasicBlock::nextFreeBlock = block;
 }
 
 //------------------------------------------------------------------------
