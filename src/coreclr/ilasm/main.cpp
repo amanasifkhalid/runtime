@@ -318,6 +318,18 @@ extern "C" int _cdecl wmain(int argc, _In_ WCHAR **argv)
                     else if (!_stricmp(szOpt, "DET"))
                     {
                       pAsm->m_fDeterministic = TRUE;
+#ifdef __linux__
+                      // On Linux, we depend on OpenSSL for its SHA-256 implementation,
+                      // so if it isn't available on the target machine, we cannot use the determinism flag.
+                      #include <dlfcn.h>
+                      void* libHnd = dlopen("libssl.so", RTLD_LAZY);
+                      if (libHnd == NULL)
+                      {
+                        fprintf(stderr, "\nWarning: OpenSSL is needed for deterministic builds on Linux; disabling /DET\n");
+                        pAsm->m_fDeterministic = FALSE;
+                      }
+                      dlclose(libHnd);
+#endif // __linux__
                     }
                     else if (!_stricmp(szOpt, "X64"))
                     {
