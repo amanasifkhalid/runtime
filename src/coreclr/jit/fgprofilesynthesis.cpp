@@ -46,6 +46,13 @@ void ProfileSynthesis::Run(ProfileSynthesisOption option)
         m_cyclicProbabilities = new (m_comp, CMK_Pgo) weight_t[m_loops->NumLoops()];
     }
 
+    const bool useSolver = INDEBUG(JitConfig.JitSynthesisUseSolver()&&) true;
+
+    if (useSolver)
+    {
+        m_countVector.resize(m_dfsTree->GetPostOrderCount(), BB_ZERO_WEIGHT);
+    }
+
     // Profile synthesis can be run before or after morph, so tolerate (non-)canonical method entries
     //
     m_entryBlock = (m_comp->opts.IsOSR() && (m_comp->fgEntryBB != nullptr)) ? m_comp->fgEntryBB : m_comp->fgFirstBB;
@@ -130,6 +137,11 @@ void ProfileSynthesis::Run(ProfileSynthesisOption option)
         m_overflow                  = false;
         m_cappedCyclicProbabilities = 0;
         entryBlockWeight            = m_entryBlock->bbWeight;
+
+        for (weight_t& weight : m_countVector)
+        {
+            weight = BB_ZERO_WEIGHT;
+        }
 
         // Regularize the edge likelihoods...
         //
@@ -1194,10 +1206,6 @@ void ProfileSynthesis::ComputeBlockWeight(BasicBlock* block)
 //
 void ProfileSynthesis::GaussSeidelSolver()
 {
-    // The computed block weights.
-    //
-    jitstd::vector<weight_t> countVector(m_comp->fgBBNumMax + 1, 0, m_comp->getAllocator(CMK_Pgo));
-
     // The algorithm.
     //
     bool                          converged            = false;
@@ -1292,9 +1300,10 @@ void ProfileSynthesis::GaussSeidelSolver()
                         // If we haven't added flow edges into/out of finallies yet,
                         // add in the weight of their corresponding try regions.
                         //
-                        if (!callFinalliesCreated && ehDsc->HasFinallyHandler())
+                        if (!callFinalliesCreated && ehDsc->HasFinallyHandler() &&
+                            m_dfsTree->Contains(ehDsc->ebdTryBeg))
                         {
-                            newWeight += countVector[ehDsc->ebdTryBeg->bbNum];
+                            newWeight += m_countVector[ehDsc->ebdTryBeg->bbPostorderNum];
                         }
                     }
                 }
@@ -1318,7 +1327,8 @@ void ProfileSynthesis::GaussSeidelSolver()
                     for (FlowEdge* const edge : loop->EntryEdges())
                     {
                         BasicBlock* const predBlock = edge->getSourceBlock();
-                        newWeight += edge->getLikelihood() * countVector[predBlock->bbNum];
+                        assert(m_dfsTree->Contains(predBlock));
+                        newWeight += edge->getLikelihood() * m_countVector[predBlock->bbPostorderNum];
                     }
 
                     // Scale by cyclic probability
@@ -1350,7 +1360,14 @@ void ProfileSynthesis::GaussSeidelSolver()
                             continue;
                         }
 
-                        newWeight += edge->getLikelihood() * countVector[predBlock->bbNum];
+                        // Ignore unreachable predecessors
+                        //
+                        if (!m_dfsTree->Contains(predBlock))
+                        {
+                            continue;
+                        }
+
+                        newWeight += edge->getLikelihood() * m_countVector[predBlock->bbPostorderNum];
                     }
 
                     if (selfEdge != nullptr)
@@ -1370,7 +1387,7 @@ void ProfileSynthesis::GaussSeidelSolver()
             // and so it is risky to use \omega > 1 -- our dominant eigenvalue may be very close to 1.
             // Also even if safe, SOR may over-correct and give negative results.
             //
-            weight_t const oldWeight = countVector[block->bbNum];
+            weight_t const oldWeight = m_countVector[block->bbPostorderNum];
             weight_t const change    = newWeight - oldWeight;
 
             // Hence counts will not decrease.
@@ -1401,7 +1418,7 @@ void ProfileSynthesis::GaussSeidelSolver()
                         block->bbNum, oldWeight, newWeight, change, isExit ? " [exit]" : "");
             }
 
-            countVector[block->bbNum] = newWeight;
+            m_countVector[block->bbPostorderNum] = newWeight;
 
             // Remember max absolute and relative change
             // (note rel residual will be as large as 1e9 at times, that's ok)
@@ -1506,7 +1523,7 @@ void ProfileSynthesis::GaussSeidelSolver()
     for (unsigned j = m_dfsTree->GetPostOrderCount(); j != 0; j--)
     {
         BasicBlock* const block = dfs->GetPostOrder(j - 1);
-        block->setBBProfileWeight(max(0.0, countVector[block->bbNum]));
+        block->setBBProfileWeight(max(0.0, m_countVector[j - 1]));
     }
 
     m_approximate = !converged || (m_cappedCyclicProbabilities > 0);

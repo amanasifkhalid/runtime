@@ -42,6 +42,7 @@ public:
 private:
     ProfileSynthesis(Compiler* compiler)
         : m_comp(compiler)
+        , m_countVector(compiler->getAllocator(CMK_Pgo))
     {
     }
 
@@ -83,20 +84,21 @@ private:
     void GaussSeidelSolver();
 
 private:
-    Compiler* const        m_comp;
-    FlowGraphDfsTree*      m_dfsTree                   = nullptr;
-    FlowGraphNaturalLoops* m_loops                     = nullptr;
-    BasicBlock*            m_entryBlock                = nullptr;
-    weight_t*              m_cyclicProbabilities       = nullptr;
-    weight_t               m_blendFactor               = initialBlendFactor;
-    weight_t               m_loopExitLikelihood        = loopExitLikelihood;
-    weight_t               m_loopBackLikelihood        = loopBackLikelihood;
-    weight_t               m_returnLikelihood          = returnLikelihood;
-    unsigned               m_improperLoopHeaders       = 0;
-    unsigned               m_cappedCyclicProbabilities = 0;
-    bool                   m_approximate               = false;
-    bool                   m_overflow                  = false;
-    bool                   m_hasInfiniteLoop           = false;
+    Compiler* const          m_comp;
+    jitstd::vector<weight_t> m_countVector;
+    FlowGraphDfsTree*        m_dfsTree                   = nullptr;
+    FlowGraphNaturalLoops*   m_loops                     = nullptr;
+    BasicBlock*              m_entryBlock                = nullptr;
+    weight_t*                m_cyclicProbabilities       = nullptr;
+    weight_t                 m_blendFactor               = initialBlendFactor;
+    weight_t                 m_loopExitLikelihood        = loopExitLikelihood;
+    weight_t                 m_loopBackLikelihood        = loopBackLikelihood;
+    weight_t                 m_returnLikelihood          = returnLikelihood;
+    unsigned                 m_improperLoopHeaders       = 0;
+    unsigned                 m_cappedCyclicProbabilities = 0;
+    bool                     m_approximate               = false;
+    bool                     m_overflow                  = false;
+    bool                     m_hasInfiniteLoop           = false;
 };
 
 #endif // !_FGPROFILESYNTHESIS_H_
