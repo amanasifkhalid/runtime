@@ -3029,7 +3029,7 @@ void Compiler::compInitOptions(JitFlags* jitFlags)
 #endif
 #endif // DEBUG
 
-    opts.compProcedureSplitting = jitFlags->IsSet(JitFlags::JIT_FLAG_PROCSPLIT) || enableFakeSplitting;
+    opts.compProcedureSplitting = true;
 
 #ifdef FEATURE_CFI_SUPPORT
     // Hot/cold splitting is not being tested on NativeAOT.

@@ -11389,7 +11389,6 @@ void CEEJitInfo::reserveUnwindInfo(bool isFunclet, bool isColdCode, uint32_t unw
 
     JIT_TO_EE_TRANSITION_LEAF();
 
-    CONSISTENCY_CHECK_MSG(!isColdCode, "Hot/Cold splitting is not supported in jitted code");
     _ASSERTE_MSG(m_theUnwindBlock == NULL,
         "reserveUnwindInfo() can only be called before allocMem(), but allocMem() has already been called. "
         "This may indicate the JIT has hit a NO_WAY assert after calling allocMem(), and is re-JITting. "
@@ -11423,9 +11422,9 @@ void CEEJitInfo::reserveUnwindInfo(bool isFunclet, bool isColdCode, uint32_t unw
 // Parameters:
 //
 //    pHotCode        main method code buffer, always filled in
-//    pColdCode       always NULL for jitted code
-//    startOffset     start of code block, relative to pHotCode
-//    endOffset       end of code block, relative to pHotCode
+//    pColdCode       buffer for cold suffix to main method
+//    startOffset     start of code block
+//    endOffset       end of code block
 //    unwindSize      size of unwind info pointed to by pUnwindBlock
 //    pUnwindBlock    pointer to unwind info
 //    funcKind        type of funclet (main method code, handler, filter)
@@ -11450,8 +11449,6 @@ void CEEJitInfo::allocUnwindInfo (
         PRECONDITION(m_usedUnwindInfos < m_totalUnwindInfos);
         PRECONDITION(endOffset <= m_codeSize);
     } CONTRACTL_END;
-
-    CONSISTENCY_CHECK_MSG(pColdCode == NULL, "Hot/Cold code splitting not supported for jitted code");
 
     JIT_TO_EE_TRANSITION();
 
@@ -11499,7 +11496,7 @@ void CEEJitInfo::allocUnwindInfo (
 
     TADDR baseAddress = m_moduleBase;
 
-    size_t currentCodeSizeT = (size_t)pHotCode - baseAddress;
+    size_t currentCodeSizeT = (size_t)(((pColdCode == NULL) ? pHotCode : pColdCode) - baseAddress);
 
     /* Check if currentCodeSizeT offset fits in 32-bits */
     if (!FitsInU4(currentCodeSizeT))
@@ -11532,7 +11529,7 @@ void CEEJitInfo::allocUnwindInfo (
     RUNTIME_FUNCTION__SetBeginAddress(pRuntimeFunction, currentCodeOffset + startOffset);
 
 #ifdef TARGET_AMD64
-    pRuntimeFunction->EndAddress        = currentCodeOffset + endOffset;
+    pRuntimeFunction->EndAddress = currentCodeOffset + endOffset;
 #endif
 
     RUNTIME_FUNCTION__SetUnwindInfoAddress(pRuntimeFunction, unwindInfoDelta);
@@ -12405,12 +12402,6 @@ void CEEJitInfo::allocMem (AllocMemArgs *pArgs)
 
     JIT_TO_EE_TRANSITION();
 
-    _ASSERTE(pArgs->coldCodeSize == 0);
-    if (pArgs->coldCodeBlock)
-    {
-        pArgs->coldCodeBlock = NULL;
-    }
-
     ULONG codeSize      = pArgs->hotCodeSize;
     void **codeBlock    = &pArgs->hotCodeBlock;
     void **codeBlockRW  = &pArgs->hotCodeBlockRW;
@@ -12494,6 +12485,20 @@ void CEEJitInfo::allocMem (AllocMemArgs *pArgs)
                                       , m_totalUnwindInfos
 #endif
                                        );
+    if (pArgs->coldCodeSize > 0)
+    {
+        m_jitManager->allocCode<CodeHeader>(m_pMethodBeingCompiled, pArgs->coldCodeSize, GetReserveForJumpStubs(), 0, &m_CodeHeader, &m_CodeHeaderRW, &m_codeWriteBufferSize, &m_pCodeHeap
+                                            , &m_pRealCodeHeader
+#ifdef FEATURE_EH_FUNCLETS
+                                            , 0
+#endif
+                                            );
+    }
+    else
+    {
+        pArgs->coldCodeBlock = NULL;
+        pArgs->coldCodeBlockRW = NULL;
+    }
 
 #ifdef FEATURE_EH_FUNCLETS
     m_moduleBase = m_pCodeHeap->GetModuleBase();
@@ -12504,7 +12509,7 @@ void CEEJitInfo::allocMem (AllocMemArgs *pArgs)
 
     *codeBlock = current;
     *codeBlockRW = current + writeableOffset;
-    current += codeSize;
+    current += pArgs->hotCodeSize;
 
     if (pArgs->roDataSize > 0)
     {
