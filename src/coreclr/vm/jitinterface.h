@@ -525,6 +525,7 @@ public:
           m_coldCodeWriteBufferSize(0),
           m_pRealCodeHeader(NULL),
           m_pCodeHeap(NULL),
+          m_pColdCodeHeap(NULL),
           m_ILHeader(header),
           m_GCinfo_len(0),
           m_EHinfo_len(0),
@@ -596,6 +597,7 @@ public:
         m_coldCodeWriteBufferSize = 0;
         m_pRealCodeHeader = NULL;
         m_pCodeHeap = NULL;
+        m_pColdCodeHeap = NULL;
 
         if (m_pOffsetMapping != NULL)
             freeArrayInternal(m_pOffsetMapping);
@@ -690,6 +692,7 @@ protected:
     size_t                  m_coldCodeWriteBufferSize;
     BYTE*                   m_pRealCodeHeader;
     HeapList*               m_pCodeHeap;
+    HeapList*               m_pColdCodeHeap;
     COR_ILMETHOD_DECODER *  m_ILHeader;     // the code header as exist in the file
 
 #if defined(_DEBUG)

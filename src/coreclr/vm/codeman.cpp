@@ -3144,6 +3144,11 @@ EEJitManager::DomainCodeHeapList *EECodeGenManager::GetCodeHeapList(CodeHeapRequ
         ppList = m_DynamicDomainCodeHeaps.Table();
         count = m_DynamicDomainCodeHeaps.Count();
     }
+    else if (pInfo->IsColdCode())
+    {
+        ppList = m_ColdDomainCodeHeaps.Table();
+        count = m_ColdDomainCodeHeaps.Count();
+    }
     else
     {
         ppList = m_DomainCodeHeaps.Table();
@@ -3274,6 +3279,8 @@ EEJitManager::DomainCodeHeapList * EECodeGenManager::CreateCodeHeapList(CodeHeap
     DomainCodeHeapList **ppList = NULL;
     if (pInfo->IsDynamicDomain())
         ppList = m_DynamicDomainCodeHeaps.AppendThrowing();
+    else if (pInfo->IsColdCode())
+        ppList = m_ColdDomainCodeHeaps.AppendThrowing();
     else
         ppList = m_DomainCodeHeaps.AppendThrowing();
     *ppList = pNewList;
@@ -3674,6 +3681,26 @@ void EECodeGenManager::Unload(LoaderAllocator *pAllocator)
         if (ppList[i]->m_pAllocator== pAllocator) {
             DomainCodeHeapList *pList = ppList[i];
             m_DomainCodeHeaps.DeleteByIndex(i);
+
+            // pHeapList is allocated in pHeap, so only need to delete the LoaderHeap itself
+            count = pList->m_CodeHeapList.Count();
+            for (i=0; i < count; i++) {
+                HeapList *pHeapList = pList->m_CodeHeapList[i];
+                DeleteCodeHeap(pHeapList);
+            }
+
+            // this is ok to do delete as anyone accessing the DomainCodeHeapList structure holds the critical section.
+            delete pList;
+
+            break;
+        }
+    }
+    ppList = m_ColdDomainCodeHeaps.Table();
+    count = m_ColdDomainCodeHeaps.Count();
+    for (int i=0; i < count; i++) {
+        if (ppList[i]->m_pAllocator== pAllocator) {
+            DomainCodeHeapList *pList = ppList[i];
+            m_ColdDomainCodeHeaps.DeleteByIndex(i);
 
             // pHeapList is allocated in pHeap, so only need to delete the LoaderHeap itself
             count = pList->m_CodeHeapList.Count();

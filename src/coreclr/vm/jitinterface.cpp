@@ -10961,7 +10961,7 @@ void CEECodeGenInfo::NibbleMapSet()
     if (m_ColdCodeHeader != NULL)
     {
         ColdCodeHeader* pColdCodeHeader = (ColdCodeHeader*)m_ColdCodeHeader;
-        m_jitManager->NibbleMapSet(m_pCodeHeap, pColdCodeHeader->GetCodeStartAddress(), m_coldCodeWriteBufferSize - sizeof(ColdCodeHeader));
+        m_jitManager->NibbleMapSet(m_pColdCodeHeap, pColdCodeHeader->GetCodeStartAddress(), m_coldCodeWriteBufferSize - sizeof(ColdCodeHeader));
     }
 }
 
@@ -12515,7 +12515,7 @@ void CEEJitInfo::allocMem (AllocMemArgs *pArgs)
 
     if (pArgs->coldCodeSize > 0)
     {
-        m_jitManager->allocCode<ColdCodeHeader>(m_pMethodBeingCompiled, pArgs->coldCodeSize, 0, (CorJitAllocMemFlag)0, &m_ColdCodeHeader, &m_ColdCodeHeaderRW, &m_coldCodeWriteBufferSize, &m_pCodeHeap
+        m_jitManager->allocCode<ColdCodeHeader>(m_pMethodBeingCompiled, pArgs->coldCodeSize, 0, (CorJitAllocMemFlag)0, &m_ColdCodeHeader, &m_ColdCodeHeaderRW, &m_coldCodeWriteBufferSize, &m_pColdCodeHeap
                                             , NULL
 #ifdef FEATURE_EH_FUNCLETS
                                             , 0
