@@ -1113,9 +1113,24 @@ BOOL IJitManager::IsFunclet(EECodeInfo * pCodeInfo)
     CONTRACTL_END;
 
     TADDR funcletStartAddress = GetFuncletStartAddress(pCodeInfo);
-    TADDR methodStartAddress = pCodeInfo->GetStartAddress();
+    if (!pCodeInfo->GetMethodToken().IsCold())
+    {
+        TADDR methodStartAddress = pCodeInfo->GetStartAddress();
+        return (funcletStartAddress != methodStartAddress);
+    }
 
-    return (funcletStartAddress != methodStartAddress);
+    EH_CLAUSE_ENUMERATOR pEnumState;
+    unsigned EHCount = InitializeEHEnumeration(pCodeInfo->GetMethodToken(), &pEnumState);
+
+    if (EHCount == 0)
+    {
+        return FALSE;
+    }
+
+    EE_ILEXCEPTION_CLAUSE EHClause;
+    GetNextEHClause(&pEnumState, &EHClause);
+    PCODE handlerRegionStart = GetCodeAddressForRelOffset(pCodeInfo->GetMethodToken(), EHClause.HandlerStartPC);
+    return (handlerRegionStart <= funcletStartAddress);
 }
 
 BOOL IJitManager::IsFilterFunclet(EECodeInfo * pCodeInfo)
@@ -2685,6 +2700,11 @@ HeapList* EECodeGenManager::NewCodeHeap(CodeHeapRequestInfo *pInfo, DomainCodeHe
         flags |= RangeSection::RANGE_SECTION_INTERPRETER;
     }
 
+    if (pInfo->IsColdCode())
+    {
+        flags |= RangeSection::RANGE_SECTION_COLDCODE;
+    }
+
     if (pInfo->IsDynamicDomain())
     {
         flags |= RangeSection::RANGE_SECTION_COLLECTIBLE;
@@ -2777,7 +2797,13 @@ void* EECodeGenManager::allocCodeRaw(CodeHeapRequestInfo *pInfo,
     DomainCodeHeapList *pList = NULL;
 
     // Avoid going through the full list in the common case - try to use the most recently used codeheap
-    if (pInfo->IsDynamicDomain())
+    if (pInfo->IsColdCode())
+    {
+        _ASSERTE(!pInfo->IsDynamicDomain());
+        pCodeHeap = (HeapList *)pInfo->m_pAllocator->m_pLastUsedColdCodeHeap;
+        pInfo->m_pAllocator->m_pLastUsedColdCodeHeap = NULL;
+    }
+    else if (pInfo->IsDynamicDomain())
     {
 #ifdef FEATURE_INTERPRETER
         if (pInfo->IsInterpreted())
@@ -2858,7 +2884,11 @@ void* EECodeGenManager::allocCodeRaw(CodeHeapRequestInfo *pInfo,
         }
     }
 
-    if (pInfo->IsDynamicDomain())
+    if (pInfo->IsColdCode())
+    {
+        pInfo->m_pAllocator->m_pLastUsedColdCodeHeap = pCodeHeap;
+    }
+    else if (pInfo->IsDynamicDomain())
     {
 #ifdef FEATURE_INTERPRETER
         if (pInfo->IsInterpreted())
@@ -2947,6 +2977,9 @@ void EECodeGenManager::allocCode(MethodDesc* pMD, size_t blockSize, size_t reser
     TCodeHeader * pCodeHdrRW = NULL;
 
     CodeHeapRequestInfo requestInfo(pMD);
+
+    constexpr bool isColdCode = std::is_same<TCodeHeader, ColdCodeHeader>::value;
+
 #if defined(FEATURE_JIT_PITCHING)
     if (pMD && pMD->IsPitchable() && CLRConfig::GetConfigValue(CLRConfig::INTERNAL_JitPitchMethodSizeThreshold) < blockSize)
     {
@@ -2967,6 +3000,12 @@ void EECodeGenManager::allocCode(MethodDesc* pMD, size_t blockSize, size_t reser
     }
     else
 #endif // FEATURE_INTERPRETER
+    if (isColdCode)
+    {
+        requestInfo.SetColdCode();
+        realHeaderSize = 0;
+    }
+    else
     {
         requestInfo.setReserveForJumpStubs(reserveForJumpStubs);
 
@@ -3018,38 +3057,41 @@ void EECodeGenManager::allocCode(MethodDesc* pMD, size_t blockSize, size_t reser
             pCodeHdrRW = pCodeHdr;
         }
 
-        if (requestInfo.IsDynamicDomain())
+        if (!isColdCode)
         {
-            // Set the real code header to the writeable mapping so that we can set its members via the CodeHeader methods below
-            pCodeHdrRW->SetRealCodeHeader((BYTE *)(pCodeHdrRW + 1) + ALIGN_UP(blockSize, sizeof(void*)));
-        }
-        else
-        {
-            // TODO: think about the CodeHeap carrying around a RealCodeHeader chunking mechanism
-            //
-            // allocate the real header in the low frequency heap
-            BYTE* pRealHeader = (BYTE*)(void*)pMD->GetLoaderAllocator()->GetLowFrequencyHeap()->AllocMem(S_SIZE_T(realHeaderSize));
-            pCodeHdrRW->SetRealCodeHeader(pRealHeader);
-        }
+            if (requestInfo.IsDynamicDomain())
+            {
+                // Set the real code header to the writeable mapping so that we can set its members via the CodeHeader methods below
+                ((CodeHeader*)pCodeHdrRW)->SetRealCodeHeader((BYTE *)(pCodeHdrRW + 1) + ALIGN_UP(blockSize, sizeof(void*)));
+            }
+            else
+            {
+                // TODO: think about the CodeHeap carrying around a RealCodeHeader chunking mechanism
+                //
+                // allocate the real header in the low frequency heap
+                BYTE* pRealHeader = (BYTE*)(void*)pMD->GetLoaderAllocator()->GetLowFrequencyHeap()->AllocMem(S_SIZE_T(realHeaderSize));
+                ((CodeHeader*)pCodeHdrRW)->SetRealCodeHeader(pRealHeader);
+            }
 
-        pCodeHdrRW->SetDebugInfo(NULL);
-        pCodeHdrRW->SetEHInfo(NULL);
-        pCodeHdrRW->SetGCInfo(NULL);
-        pCodeHdrRW->SetMethodDesc(pMD);
+            ((CodeHeader*)pCodeHdrRW)->SetDebugInfo(NULL);
+            ((CodeHeader*)pCodeHdrRW)->SetEHInfo(NULL);
+            ((CodeHeader*)pCodeHdrRW)->SetGCInfo(NULL);
+            ((CodeHeader*)pCodeHdrRW)->SetMethodDesc(pMD);
 #ifdef FEATURE_EH_FUNCLETS
-        if (std::is_same<TCodeHeader, CodeHeader>::value)
-        {
-            ((CodeHeader*)pCodeHdrRW)->SetNumberOfUnwindInfos(nUnwindInfos);
-        }
+            if (std::is_same<TCodeHeader, CodeHeader>::value)
+            {
+                ((CodeHeader*)pCodeHdrRW)->SetNumberOfUnwindInfos(nUnwindInfos);
+            }
 #endif
 
-        if (requestInfo.IsDynamicDomain())
-        {
-            *ppRealHeader = (BYTE*)pCode + ALIGN_UP(blockSize, sizeof(void*));
-        }
-        else
-        {
-            *ppRealHeader = NULL;
+            if (requestInfo.IsDynamicDomain())
+            {
+                *ppRealHeader = (BYTE*)pCode + ALIGN_UP(blockSize, sizeof(void*));
+            }
+            else
+            {
+                *ppRealHeader = NULL;
+            }
         }
     }
 
@@ -3058,6 +3100,14 @@ void EECodeGenManager::allocCode(MethodDesc* pMD, size_t blockSize, size_t reser
 }
 
 template void EECodeGenManager::allocCode<CodeHeader>(MethodDesc* pMD, size_t blockSize, size_t reserveForJumpStubs, CorJitAllocMemFlag flag, void** ppCodeHeader, void** ppCodeHeaderRW,
+                                                      size_t* pAllocatedSize, HeapList** ppCodeHeap
+                                                    , BYTE** ppRealHeader
+#ifdef FEATURE_EH_FUNCLETS
+                                                    , UINT nUnwindInfos
+#endif
+                                                     );
+
+template void EECodeGenManager::allocCode<ColdCodeHeader>(MethodDesc* pMD, size_t blockSize, size_t reserveForJumpStubs, CorJitAllocMemFlag flag, void** ppCodeHeader, void** ppCodeHeaderRW,
                                                       size_t* pAllocatedSize, HeapList** ppCodeHeap
                                                     , BYTE** ppRealHeader
 #ifdef FEATURE_EH_FUNCLETS
@@ -4240,8 +4290,15 @@ PCODE EEJitManager::GetCodeAddressForRelOffset(const METHODTOKEN& MethodToken, D
 {
     WRAPPER_NO_CONTRACT;
 
-    CodeHeader * pHeader = GetCodeHeader(MethodToken);
-    return pHeader->GetCodeStartAddress() + relOffset;
+    MethodRegionInfo methodRegionInfo;
+    JitTokenToMethodRegionInfo(MethodToken, &methodRegionInfo);
+
+    if (relOffset < methodRegionInfo.hotSize)
+        return methodRegionInfo.hotStartAddress + relOffset;
+
+    SIZE_T coldOffset = relOffset - methodRegionInfo.hotSize;
+    _ASSERTE(coldOffset < methodRegionInfo.coldSize);
+    return methodRegionInfo.coldStartAddress + coldOffset;
 }
 
 #ifdef FEATURE_INTERPRETER
@@ -4276,7 +4333,22 @@ BOOL EECodeGenManager::JitCodeToMethodInfoWorker(
     if (start == (TADDR)0)
         return FALSE;
 
-    TCodeHeader * pCHdr = (DPTR(TCodeHeader))(start - sizeof(TCodeHeader));
+    METHODTOKEN MethodToken(pRangeSection, dac_cast<TADDR>(start - sizeof(TCodeHeader)));
+    TCodeHeader * pCHdr;
+
+    if (std::is_same<TCodeHeader, CodeHeader>::value)
+    {
+        pCHdr = (TCodeHeader*)EEJitManager::GetCodeHeader(MethodToken);
+    }
+    else if (std::is_same<TCodeHeader, InterpreterCodeHeader>::value)
+    {
+        pCHdr = (TCodeHeader*)InterpreterJitManager::GetCodeHeader(MethodToken);
+    }
+    else
+    {
+        return FALSE;
+    }
+
     if (pCHdr->IsStubCodeBlock())
         return FALSE;
 
@@ -4284,12 +4356,19 @@ BOOL EECodeGenManager::JitCodeToMethodInfoWorker(
 
     if (pCodeInfo)
     {
-        pCodeInfo->m_methodToken = METHODTOKEN(pRangeSection, dac_cast<TADDR>(pCHdr));
+        pCodeInfo->m_methodToken = MethodToken;
 
         // This can be counted on for Jitted code. For NGEN code in the case
         // where we have hot/cold splitting this isn't valid and we need to
         // take into account cold code.
         pCodeInfo->m_relOffset = (DWORD)(PCODEToPINSTR(currentPC) - start);
+
+        if (MethodToken.IsCold())
+        {
+            MethodRegionInfo methodRegionInfo;
+            JitTokenToMethodRegionInfo(MethodToken, &methodRegionInfo);
+            pCodeInfo->m_relOffset += (DWORD)methodRegionInfo.hotSize;
+        }
 
 #ifdef FEATURE_EH_FUNCLETS
         // Computed lazily by code:EEJitManager::LazyGetFunctionEntry

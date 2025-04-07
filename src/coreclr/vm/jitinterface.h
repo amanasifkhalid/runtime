@@ -519,7 +519,10 @@ public:
           m_jitManager(jm),
           m_CodeHeader(NULL),
           m_CodeHeaderRW(NULL),
+          m_ColdCodeHeader(NULL),
+          m_ColdCodeHeaderRW(NULL),
           m_codeWriteBufferSize(0),
+          m_coldCodeWriteBufferSize(0),
           m_pRealCodeHeader(NULL),
           m_pCodeHeap(NULL),
           m_ILHeader(header),
@@ -553,7 +556,13 @@ public:
         } CONTRACTL_END;
 
         if (m_CodeHeaderRW != m_CodeHeader)
+        {
             freeArrayInternal(m_CodeHeaderRW);
+            if (m_ColdCodeHeaderRW != m_ColdCodeHeader)
+            {
+                freeArrayInternal(m_ColdCodeHeaderRW);
+            }
+        }
 
         if (m_pOffsetMapping != NULL)
             freeArrayInternal(m_pOffsetMapping);
@@ -570,12 +579,21 @@ public:
         } CONTRACTL_END;
 
         if (m_CodeHeaderRW != m_CodeHeader)
+        {
             freeArrayInternal(m_CodeHeaderRW);
+            if (m_ColdCodeHeaderRW != m_ColdCodeHeader)
+            {
+                freeArrayInternal(m_ColdCodeHeaderRW);
+            }
+        }
 
         m_CodeHeader = NULL;
         m_CodeHeaderRW = NULL;
+        m_ColdCodeHeader = NULL;
+        m_ColdCodeHeaderRW = NULL;
 
         m_codeWriteBufferSize = 0;
+        m_coldCodeWriteBufferSize = 0;
         m_pRealCodeHeader = NULL;
         m_pCodeHeap = NULL;
 
@@ -664,9 +682,12 @@ protected:
                         );
 
     EECodeGenManager*       m_jitManager;   // responsible for allocating memory
-    void*                   m_CodeHeader;   // descriptor for JITTED code - read/execute address
-    void*                   m_CodeHeaderRW; // descriptor for JITTED code - code write scratch buffer address
+    void*                   m_CodeHeader;   // descriptor for hot JITTED code - read/execute address
+    void*                   m_CodeHeaderRW; // descriptor for hot JITTED code - code write scratch buffer address
+    void*                   m_ColdCodeHeader;   // descriptor for cold JITTED code - read/execute address
+    void*                   m_ColdCodeHeaderRW; // descriptor for cold JITTED code - code write scratch buffer address
     size_t                  m_codeWriteBufferSize;
+    size_t                  m_coldCodeWriteBufferSize;
     BYTE*                   m_pRealCodeHeader;
     HeapList*               m_pCodeHeap;
     COR_ILMETHOD_DECODER *  m_ILHeader;     // the code header as exist in the file

@@ -70,6 +70,7 @@ LoaderAllocator::LoaderAllocator(bool collectible) :
     m_pVSDHeapInitialAlloc = NULL;
     m_pLastUsedCodeHeap = NULL;
     m_pLastUsedDynamicCodeHeap = NULL;
+    m_pLastUsedColdCodeHeap = NULL;
 #ifdef FEATURE_INTERPRETER
     m_pLastUsedInterpreterCodeHeap = NULL;
     m_pLastUsedInterpreterDynamicCodeHeap = NULL;

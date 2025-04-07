@@ -159,6 +159,7 @@ inline void ReportStubBlock(void* start, size_t size, StubCodeBlockKind kind)
 
 typedef DPTR(struct RealCodeHeader) PTR_RealCodeHeader;
 typedef DPTR(struct CodeHeader) PTR_CodeHeader;
+typedef DPTR(struct ColdCodeHeader) PTR_ColdCodeHeader;
 
 struct RealCodeHeader
 {
@@ -305,6 +306,17 @@ public:
 
 };
 
+struct ColdCodeHeader
+{
+    void* pCodeHeader;
+
+    TADDR GetCodeStartAddress()
+    {
+        SUPPORTS_DAC;
+        return dac_cast<PCODE>(dac_cast<PTR_ColdCodeHeader>(this) + 1);
+    }
+};
+
 typedef DPTR(RealCodeHeader) PTR_RealCodeHeader;
 typedef DPTR(InterpreterRealCodeHeader) PTR_InterpreterRealCodeHeader;
 
@@ -397,6 +409,7 @@ struct CodeHeapRequestInfo
     bool         m_isCollectible;
     bool         m_isInterpreted;
     bool         m_throwOnOutOfMemoryWithinRange;
+    bool         m_isColdCode;
 
     bool   IsDynamicDomain()                    { return m_isDynamicDomain;    }
     void   SetDynamicDomain()                   { m_isDynamicDomain = true;    }
@@ -418,13 +431,17 @@ struct CodeHeapRequestInfo
     bool   getThrowOnOutOfMemoryWithinRange()   { return m_throwOnOutOfMemoryWithinRange; }
     void   setThrowOnOutOfMemoryWithinRange(bool value) { m_throwOnOutOfMemoryWithinRange = value; }
 
+    bool   IsColdCode()                         { return m_isColdCode; }
+    void   SetColdCode()                        { m_isColdCode = true; }
+
     void   Init();
 
     CodeHeapRequestInfo(MethodDesc *pMD)
         : m_pMD(pMD), m_pAllocator(0),
           m_loAddr(0), m_hiAddr(0),
           m_requestSize(0), m_reserveSize(0), m_reserveForJumpStubs(0)
-        , m_isInterpreted(false)
+        , m_isInterpreted(false), m_throwOnOutOfMemoryWithinRange(false)
+        , m_isColdCode(false)
     { WRAPPER_NO_CONTRACT;   Init(); }
 
     CodeHeapRequestInfo(MethodDesc *pMD, LoaderAllocator* pAllocator,
@@ -432,7 +449,8 @@ struct CodeHeapRequestInfo
         : m_pMD(pMD), m_pAllocator(pAllocator),
           m_loAddr(loAddr), m_hiAddr(hiAddr),
           m_requestSize(0), m_reserveSize(0), m_reserveForJumpStubs(0)
-        , m_isInterpreted(false)
+        , m_isInterpreted(false), m_throwOnOutOfMemoryWithinRange(false)
+        , m_isColdCode(false)
     { WRAPPER_NO_CONTRACT;   Init(); }
 };
 
@@ -699,6 +717,7 @@ struct RangeSection
         RANGE_SECTION_CODEHEAP      = 0x2,
         RANGE_SECTION_RANGELIST     = 0x4,
         RANGE_SECTION_INTERPRETER   = 0x8,
+        RANGE_SECTION_COLDCODE      = 0x10,
     };
 
 #ifdef FEATURE_READYTORUN
@@ -2496,11 +2515,23 @@ struct cdac_data<ExecutionManager>
 };
 #endif
 
+inline BOOL METHODTOKEN::IsCold() const
+{
+    return m_pRangeSection->_flags & RangeSection::RANGE_SECTION_COLDCODE;
+}
+
 inline CodeHeader * EEJitManager::GetCodeHeader(const METHODTOKEN& MethodToken)
 {
     LIMITED_METHOD_DAC_CONTRACT;
     _ASSERTE(!MethodToken.IsNull());
-    return dac_cast<PTR_CodeHeader>(MethodToken.m_pCodeHeader);
+    TADDR codeHeader = MethodToken.m_pCodeHeader;
+
+    if (MethodToken.IsCold())
+    {
+        codeHeader = (TADDR)((ColdCodeHeader*)codeHeader)->pCodeHeader;
+    }
+
+    return dac_cast<PTR_CodeHeader>(codeHeader);
 }
 
 inline CodeHeader * EEJitManager::GetCodeHeaderFromStartAddress(TADDR methodStartAddress)
@@ -2533,10 +2564,27 @@ inline void EEJitManager::JitTokenToMethodRegionInfo(const METHODTOKEN& MethodTo
         PRECONDITION(methodRegionInfo != NULL);
     } CONTRACTL_END;
 
-    methodRegionInfo->hotStartAddress  = JitTokenToStartAddress(MethodToken);
-    methodRegionInfo->hotSize          = GetCodeManager()->GetFunctionSize(GetGCInfoToken(MethodToken));
-    methodRegionInfo->coldStartAddress = 0;
-    methodRegionInfo->coldSize         = 0;
+    methodRegionInfo->hotStartAddress = JitTokenToStartAddress(MethodToken);
+    methodRegionInfo->hotSize         = GetCodeManager()->GetFunctionSize(GetGCInfoToken(MethodToken));
+
+#ifdef FEATURE_EH_FUNCLETS
+    if (MethodToken.IsCold())
+    {
+        CodeHeader * pCodeHeader = GetCodeHeader(MethodToken);
+        UINT unwindInfos         = pCodeHeader->GetNumberOfUnwindInfos();
+        _ASSERTE(unwindInfos > 1);
+        ColdCodeHeader * pColdHeader       = (ColdCodeHeader*)MethodToken.m_pCodeHeader;
+        methodRegionInfo->coldStartAddress = pColdHeader->GetCodeStartAddress();
+        methodRegionInfo->coldSize = RUNTIME_FUNCTION__EndAddress(pCodeHeader->GetUnwindInfo(unwindInfos - 1), 0)
+            - methodRegionInfo->coldStartAddress;
+        methodRegionInfo->hotSize -= methodRegionInfo->coldSize;
+    }
+    else
+#endif // FEATURE_EH_FUNCLETS
+    {
+        methodRegionInfo->coldStartAddress = 0;
+        methodRegionInfo->coldSize         = 0;
+    }
 }
 
 #if defined(FEATURE_READYTORUN)

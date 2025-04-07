@@ -10918,6 +10918,12 @@ void CEEJitInfo::WriteCodeBytes()
     {
         ExecutableWriterHolder<void> codeWriterHolder((void *)m_CodeHeader, m_codeWriteBufferSize);
         memcpy(codeWriterHolder.GetRW(), m_CodeHeaderRW, m_codeWriteBufferSize);
+
+        if (m_ColdCodeHeaderRW != m_ColdCodeHeader)
+        {
+            ExecutableWriterHolder<void> coldCodeWriterHolder((void *)m_ColdCodeHeader, m_coldCodeWriteBufferSize);
+            memcpy(coldCodeWriterHolder.GetRW(), m_ColdCodeHeaderRW, m_coldCodeWriteBufferSize);
+        }
     }
 }
 
@@ -10951,6 +10957,12 @@ void CEECodeGenInfo::NibbleMapSet()
     // m_codeWriteBufferSize is the size of the code region + code header. The nibble map should only use
     // the code region, therefore we subtract the size of the CodeHeader.
     m_jitManager->NibbleMapSet(m_pCodeHeap, pCodeHeader->GetCodeStartAddress(), m_codeWriteBufferSize - sizeof(TCodeHeader));
+
+    if (m_ColdCodeHeader != NULL)
+    {
+        ColdCodeHeader* pColdCodeHeader = (ColdCodeHeader*)m_ColdCodeHeader;
+        m_jitManager->NibbleMapSet(m_pCodeHeap, pColdCodeHeader->GetCodeStartAddress(), m_coldCodeWriteBufferSize - sizeof(ColdCodeHeader));
+    }
 }
 
 /*********************************************************************/
@@ -11463,13 +11475,24 @@ void CEEJitInfo::allocUnwindInfo (
     // in this function.
     //
 
-    if (funcKind != CORJIT_FUNC_ROOT)
+    CodeHeader *pCodeHeaderRW = (CodeHeader *)m_CodeHeaderRW;
+
+    if (funcKind == CORJIT_FUNC_ROOT)
     {
-        // The main method should be emitted before funclets
+        if (pColdCode != NULL)
+        {
+            _ASSERTE(m_usedUnwindInfos == 1);
+        }
+        else
+        {
+            _ASSERTE(m_usedUnwindInfos == 0);
+        }
+    }
+    else
+    {
+        // The main method should be emitted before funclets and cold code
         _ASSERTE(m_usedUnwindInfos > 0);
     }
-
-    CodeHeader *pCodeHeaderRW = (CodeHeader *)m_CodeHeaderRW;
 
     PT_RUNTIME_FUNCTION pRuntimeFunction = pCodeHeaderRW->GetUnwindInfo(m_usedUnwindInfos);
 
@@ -12485,24 +12508,31 @@ void CEEJitInfo::allocMem (AllocMemArgs *pArgs)
                                       , m_totalUnwindInfos
 #endif
                                        );
+
+#ifdef FEATURE_EH_FUNCLETS
+    m_moduleBase = m_pCodeHeap->GetModuleBase();
+#endif
+
     if (pArgs->coldCodeSize > 0)
     {
-        m_jitManager->allocCode<CodeHeader>(m_pMethodBeingCompiled, pArgs->coldCodeSize, GetReserveForJumpStubs(), 0, &m_CodeHeader, &m_CodeHeaderRW, &m_codeWriteBufferSize, &m_pCodeHeap
-                                            , &m_pRealCodeHeader
+        m_jitManager->allocCode<ColdCodeHeader>(m_pMethodBeingCompiled, pArgs->coldCodeSize, 0, (CorJitAllocMemFlag)0, &m_ColdCodeHeader, &m_ColdCodeHeaderRW, &m_coldCodeWriteBufferSize, &m_pCodeHeap
+                                            , NULL
 #ifdef FEATURE_EH_FUNCLETS
                                             , 0
 #endif
                                             );
+
+        _ASSERTE(m_coldCodeWriteBufferSize == (pArgs->coldCodeSize + sizeof(ColdCodeHeader)));
+        ((ColdCodeHeader*)m_ColdCodeHeaderRW)->pCodeHeader = m_CodeHeaderRW;
+
+        pArgs->coldCodeBlock = (BYTE*)((ColdCodeHeader*)m_ColdCodeHeader)->GetCodeStartAddress();
+        pArgs->coldCodeBlockRW = (BYTE*)((ColdCodeHeader*)m_ColdCodeHeaderRW)->GetCodeStartAddress();
     }
     else
     {
         pArgs->coldCodeBlock = NULL;
         pArgs->coldCodeBlockRW = NULL;
     }
-
-#ifdef FEATURE_EH_FUNCLETS
-    m_moduleBase = m_pCodeHeap->GetModuleBase();
-#endif
 
     BYTE* current = (BYTE *)((CodeHeader*)m_CodeHeader)->GetCodeStartAddress();
     size_t writeableOffset = (BYTE *)m_CodeHeaderRW - (BYTE *)m_CodeHeader;
@@ -12534,7 +12564,7 @@ void CEEJitInfo::allocMem (AllocMemArgs *pArgs)
     _ASSERTE((SIZE_T)(current - (BYTE *)((CodeHeader*)m_CodeHeader)->GetCodeStartAddress()) <= totalSize.Value());
 
 #ifdef _DEBUG
-    m_codeSize = codeSize;
+    m_codeSize = codeSize + pArgs->coldCodeSize;
 #endif  // _DEBUG
 
     EE_TO_JIT_TRANSITION();

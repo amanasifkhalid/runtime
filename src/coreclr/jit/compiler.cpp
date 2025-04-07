@@ -3075,6 +3075,15 @@ void Compiler::compInitOptions(JitFlags* jitFlags)
         {
             opts.compProcedureSplittingEH = false;
         }
+
+        // JitForceProcedureSplitting is used to force procedure splitting on checked assemblies.
+        // This is useful for debugging on a checked build.  Note that we still only do procedure
+        // splitting in the zapper.
+        if (JitConfig.JitForceProcedureSplitting().contains(info.compMethodHnd, info.compClassHnd,
+                                                            &info.compMethodInfo->args))
+        {
+            opts.compProcedureSplitting = true;
+        }
 #endif
     }
 
