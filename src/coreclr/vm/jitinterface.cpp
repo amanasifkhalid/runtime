@@ -10957,12 +10957,6 @@ void CEECodeGenInfo::NibbleMapSet()
     // m_codeWriteBufferSize is the size of the code region + code header. The nibble map should only use
     // the code region, therefore we subtract the size of the CodeHeader.
     m_jitManager->NibbleMapSet(m_pCodeHeap, pCodeHeader->GetCodeStartAddress(), m_codeWriteBufferSize - sizeof(TCodeHeader));
-
-    if (m_ColdCodeHeader != NULL)
-    {
-        ColdCodeHeader* pColdCodeHeader = (ColdCodeHeader*)m_ColdCodeHeader;
-        m_jitManager->NibbleMapSet(m_pColdCodeHeap, pColdCodeHeader->GetCodeStartAddress(), m_coldCodeWriteBufferSize - sizeof(ColdCodeHeader));
-    }
 }
 
 /*********************************************************************/
@@ -10976,6 +10970,12 @@ void CEEJitInfo::WriteCode(EECodeGenManager * jitMgr)
     WriteCodeBytes();
     // Now that the code header was written to the final location, publish the code via the nibble map
     NibbleMapSet<CodeHeader>();
+
+    if (m_ColdCodeHeader != NULL)
+    {
+        ColdCodeHeader* pColdCodeHeader = (ColdCodeHeader*)m_ColdCodeHeader;
+        m_jitManager->NibbleMapSet(m_pColdCodeHeap, pColdCodeHeader->GetCodeStartAddress(), m_coldCodeWriteBufferSize - sizeof(ColdCodeHeader));
+    }
 
 #if defined(TARGET_AMD64)
     // Publish the new unwind information in a way that the ETW stack crawler can find
@@ -12523,7 +12523,7 @@ void CEEJitInfo::allocMem (AllocMemArgs *pArgs)
                                             );
 
         _ASSERTE(m_coldCodeWriteBufferSize == (pArgs->coldCodeSize + sizeof(ColdCodeHeader)));
-        ((ColdCodeHeader*)m_ColdCodeHeaderRW)->pCodeHeader = m_CodeHeaderRW;
+        ((ColdCodeHeader*)m_ColdCodeHeaderRW)->pCodeHeader = m_CodeHeader;
 
         pArgs->coldCodeBlock = (BYTE*)((ColdCodeHeader*)m_ColdCodeHeader)->GetCodeStartAddress();
         pArgs->coldCodeBlockRW = (BYTE*)((ColdCodeHeader*)m_ColdCodeHeaderRW)->GetCodeStartAddress();

@@ -519,13 +519,9 @@ public:
           m_jitManager(jm),
           m_CodeHeader(NULL),
           m_CodeHeaderRW(NULL),
-          m_ColdCodeHeader(NULL),
-          m_ColdCodeHeaderRW(NULL),
           m_codeWriteBufferSize(0),
-          m_coldCodeWriteBufferSize(0),
           m_pRealCodeHeader(NULL),
           m_pCodeHeap(NULL),
-          m_pColdCodeHeap(NULL),
           m_ILHeader(header),
           m_GCinfo_len(0),
           m_EHinfo_len(0),
@@ -557,13 +553,7 @@ public:
         } CONTRACTL_END;
 
         if (m_CodeHeaderRW != m_CodeHeader)
-        {
             freeArrayInternal(m_CodeHeaderRW);
-            if (m_ColdCodeHeaderRW != m_ColdCodeHeader)
-            {
-                freeArrayInternal(m_ColdCodeHeaderRW);
-            }
-        }
 
         if (m_pOffsetMapping != NULL)
             freeArrayInternal(m_pOffsetMapping);
@@ -580,24 +570,14 @@ public:
         } CONTRACTL_END;
 
         if (m_CodeHeaderRW != m_CodeHeader)
-        {
             freeArrayInternal(m_CodeHeaderRW);
-            if (m_ColdCodeHeaderRW != m_ColdCodeHeader)
-            {
-                freeArrayInternal(m_ColdCodeHeaderRW);
-            }
-        }
 
         m_CodeHeader = NULL;
         m_CodeHeaderRW = NULL;
-        m_ColdCodeHeader = NULL;
-        m_ColdCodeHeaderRW = NULL;
 
         m_codeWriteBufferSize = 0;
-        m_coldCodeWriteBufferSize = 0;
         m_pRealCodeHeader = NULL;
         m_pCodeHeap = NULL;
-        m_pColdCodeHeap = NULL;
 
         if (m_pOffsetMapping != NULL)
             freeArrayInternal(m_pOffsetMapping);
@@ -686,13 +666,9 @@ protected:
     EECodeGenManager*       m_jitManager;   // responsible for allocating memory
     void*                   m_CodeHeader;   // descriptor for hot JITTED code - read/execute address
     void*                   m_CodeHeaderRW; // descriptor for hot JITTED code - code write scratch buffer address
-    void*                   m_ColdCodeHeader;   // descriptor for cold JITTED code - read/execute address
-    void*                   m_ColdCodeHeaderRW; // descriptor for cold JITTED code - code write scratch buffer address
     size_t                  m_codeWriteBufferSize;
-    size_t                  m_coldCodeWriteBufferSize;
     BYTE*                   m_pRealCodeHeader;
     HeapList*               m_pCodeHeap;
-    HeapList*               m_pColdCodeHeap;
     COR_ILMETHOD_DECODER *  m_ILHeader;     // the code header as exist in the file
 
 #if defined(_DEBUG)
@@ -808,6 +784,14 @@ public:
 
         CEECodeGenInfo::ResetForJitRetry();
 
+        if (m_ColdCodeHeaderRW != m_ColdCodeHeader)
+            freeArrayInternal(m_ColdCodeHeaderRW);
+
+        m_ColdCodeHeader = NULL;
+        m_ColdCodeHeaderRW = NULL;
+        m_coldCodeWriteBufferSize = 0;
+        m_pColdCodeHeap = NULL;
+
 #ifdef FEATURE_ON_STACK_REPLACEMENT
         if (m_pPatchpointInfoFromJit != NULL)
             freeArrayInternal(m_pPatchpointInfoFromJit);
@@ -901,6 +885,10 @@ public:
     CEEJitInfo(MethodDesc* fd, COR_ILMETHOD_DECODER* header,
                EECodeGenManager* jm, bool allowInlining = true)
         : CEECodeGenInfo(fd, header, jm, allowInlining)
+        , m_ColdCodeHeader(NULL),
+          m_ColdCodeHeaderRW(NULL),
+          m_pColdCodeHeap(NULL),
+          m_coldCodeWriteBufferSize(0)
 #ifdef FEATURE_EH_FUNCLETS
         , m_moduleBase(0),
           m_totalUnwindSize(0),
@@ -938,6 +926,9 @@ public:
             GC_NOTRIGGER;
             MODE_ANY;
         } CONTRACTL_END;
+
+        if (m_ColdCodeHeaderRW != m_ColdCodeHeader)
+            freeArrayInternal(m_ColdCodeHeaderRW);
 
 #ifdef FEATURE_ON_STACK_REPLACEMENT
         if (m_pPatchpointInfoFromJit != NULL)
@@ -991,6 +982,11 @@ protected :
     ComputedPgoData*        m_foundPgoData = nullptr;
 #endif
 
+    // Members needed for hot/cold splitting
+    void*                   m_ColdCodeHeader;   // descriptor for cold JITTED code - read/execute address
+    void*                   m_ColdCodeHeaderRW; // descriptor for cold JITTED code - code write scratch buffer address
+    HeapList*               m_pColdCodeHeap;
+    size_t                  m_coldCodeWriteBufferSize;
 
 #ifdef FEATURE_EH_FUNCLETS
     TADDR                   m_moduleBase;       // Base for unwind Infos
