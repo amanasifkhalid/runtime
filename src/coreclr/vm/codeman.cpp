@@ -4744,13 +4744,22 @@ PTR_RUNTIME_FUNCTION EEJitManager::LazyGetFunctionEntry(EECodeInfo * pCodeInfo)
         return NULL;
     }
 
-    CodeHeader * pHeader = dac_cast<PTR_CodeHeader>(GetCodeHeader(pCodeInfo->GetMethodToken()));
-
-    DWORD address = RUNTIME_FUNCTION__BeginAddress(pHeader->GetUnwindInfo(0)) + pCodeInfo->GetRelOffset();
+    const METHODTOKEN& MethodToken = pCodeInfo->GetMethodToken();
+    CodeHeader * pHeader = dac_cast<PTR_CodeHeader>(GetCodeHeader(MethodToken));
 
     // We need the module base address to calculate the end address of a function from the functionEntry.
     // Thus, save it off right now.
     TADDR baseAddress = pCodeInfo->GetModuleBase();
+    DWORD address;
+
+    if (MethodToken.IsCold())
+    {
+        address = (DWORD)(GetCodeAddressForRelOffset(MethodToken, pCodeInfo->GetRelOffset()) - baseAddress);
+    }
+    else
+    {
+        address = RUNTIME_FUNCTION__BeginAddress(pHeader->GetUnwindInfo(0)) + pCodeInfo->GetRelOffset();
+    }
 
     // NOTE: We could binary search here, if it would be helpful (e.g., large number of funclets)
     for (UINT iUnwindInfo = 0; iUnwindInfo < pHeader->GetNumberOfUnwindInfos(); iUnwindInfo++)
@@ -5181,6 +5190,8 @@ BOOL ExecutionManager::IsManagedCodeWorker(PCODE currentPC, RangeSectionLockStat
         if (start == (TADDR)0)
             return FALSE;
         CodeHeader * pCHdr = PTR_CodeHeader(start - sizeof(CodeHeader));
+        if (pRS->_flags & RangeSection::RANGE_SECTION_COLDCODE)
+            pCHdr = (CodeHeader*)(((ColdCodeHeader*)pCHdr)->pCodeHeader);
         if (!pCHdr->IsStubCodeBlock())
             return TRUE;
     }

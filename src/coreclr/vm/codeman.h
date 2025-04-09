@@ -2571,13 +2571,16 @@ inline void EEJitManager::JitTokenToMethodRegionInfo(const METHODTOKEN& MethodTo
 #ifdef FEATURE_EH_FUNCLETS
     if (MethodToken.IsCold())
     {
-        CodeHeader * pCodeHeader = GetCodeHeader(MethodToken);
-        UINT unwindInfos         = pCodeHeader->GetNumberOfUnwindInfos();
-        _ASSERTE(unwindInfos > 1);
+        CodeHeader * pCodeHeader           = GetCodeHeader(MethodToken);
         ColdCodeHeader * pColdHeader       = (ColdCodeHeader*)MethodToken.m_pCodeHeader;
         methodRegionInfo->coldStartAddress = pColdHeader->GetCodeStartAddress();
-        methodRegionInfo->coldSize = RUNTIME_FUNCTION__EndAddress(pCodeHeader->GetUnwindInfo(unwindInfos - 1), 0)
-            - methodRegionInfo->coldStartAddress;
+
+        TADDR moduleBase = JitTokenToModuleBase(MethodToken);
+        UINT unwindInfos = pCodeHeader->GetNumberOfUnwindInfos();
+        _ASSERTE(unwindInfos > 1);
+        methodRegionInfo->coldSize = RUNTIME_FUNCTION__EndAddress(pCodeHeader->GetUnwindInfo(unwindInfos - 1), moduleBase)
+            - RUNTIME_FUNCTION__BeginAddress(pCodeHeader->GetUnwindInfo(1));
+        _ASSERTE(methodRegionInfo->coldSize < methodRegionInfo->hotSize);
         methodRegionInfo->hotSize -= methodRegionInfo->coldSize;
     }
     else

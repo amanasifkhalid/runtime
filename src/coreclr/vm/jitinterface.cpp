@@ -11408,7 +11408,17 @@ void CEEJitInfo::reserveUnwindInfo(bool isFunclet, bool isColdCode, uint32_t unw
 
     uint32_t currentSize  = unwindSize;
 
-    reservePersonalityRoutineSpace(currentSize);
+#ifdef TARGET_AMD64
+    if (isColdCode && !isFunclet)
+    {
+        _ASSERTE(currentSize == 0);
+        currentSize = 4 + sizeof(T_RUNTIME_FUNCTION);
+    }
+    else
+#endif // TARGET_AMD64
+    {
+        reservePersonalityRoutineSpace(currentSize);
+    }
 
     m_totalUnwindSize += currentSize;
 
@@ -11508,7 +11518,19 @@ void CEEJitInfo::allocUnwindInfo (
 
     m_usedUnwindSize += unwindSize;
 
-    reservePersonalityRoutineSpace(m_usedUnwindSize);
+#ifdef TARGET_AMD64
+    bool useChainedUnwindInfo = (pColdCode != NULL) && (funcKind == CORJIT_FUNC_ROOT);
+
+    if (useChainedUnwindInfo)
+    {
+        _ASSERTE(unwindSize == 0);
+        m_usedUnwindSize += (4 + sizeof(T_RUNTIME_FUNCTION));
+    }
+    else
+#endif // TARGET_AMD64
+    {
+        reservePersonalityRoutineSpace(m_usedUnwindSize);
+    }
 
     _ASSERTE(m_usedUnwindSize <= m_totalUnwindSize);
 
@@ -11517,6 +11539,7 @@ void CEEJitInfo::allocUnwindInfo (
 
     /* Calculate Image Relative offset to add to the jit generated unwind offsets */
 
+    _ASSERTE((pColdCode == NULL) || ((TADDR)pColdCode > (TADDR)pHotCode));
     TADDR baseAddress = m_moduleBase;
 
     size_t currentCodeSizeT = (size_t)(((pColdCode == NULL) ? pHotCode : pColdCode) - baseAddress);
@@ -11579,10 +11602,24 @@ void CEEJitInfo::allocUnwindInfo (
 
 #elif defined(TARGET_AMD64)
 
-    pUnwindInfoRW->Flags = UNW_FLAG_EHANDLER | UNW_FLAG_UHANDLER;
-
-    ULONG * pPersonalityRoutineRW = (ULONG*)ALIGN_UP(&(pUnwindInfoRW->UnwindCode[pUnwindInfoRW->CountOfUnwindCodes]), sizeof(ULONG));
-    *pPersonalityRoutineRW = ExecutionManager::GetCLRPersonalityRoutineValue();
+    if (useChainedUnwindInfo)
+    {
+        UNWIND_INFO * pMainUnwindInfo = (UNWIND_INFO*)m_theUnwindBlock;
+        UNWIND_INFO * pMainUnwindInfoRW = (UNWIND_INFO*)((BYTE*)pMainUnwindInfo + writeableOffset);
+        pUnwindInfoRW->Version = 1;
+        pUnwindInfoRW->Flags = UNW_FLAG_CHAININFO;
+        pUnwindInfoRW->SizeOfProlog = 0;
+        pUnwindInfoRW->CountOfUnwindCodes = 0;
+        pUnwindInfoRW->FrameRegister = pMainUnwindInfoRW->FrameRegister;
+        pUnwindInfoRW->FrameOffset = pMainUnwindInfoRW->FrameOffset;
+        memcpy(&(pUnwindInfoRW->UnwindCode), pCodeHeaderRW->GetUnwindInfo(0), sizeof(T_RUNTIME_FUNCTION));
+    }
+    else
+    {
+        pUnwindInfoRW->Flags = UNW_FLAG_EHANDLER | UNW_FLAG_UHANDLER;
+        ULONG * pPersonalityRoutineRW = (ULONG*)ALIGN_UP(&(pUnwindInfoRW->UnwindCode[pUnwindInfoRW->CountOfUnwindCodes]), sizeof(ULONG));
+        *pPersonalityRoutineRW = ExecutionManager::GetCLRPersonalityRoutineValue();
+    }
 
 #elif defined(TARGET_ARM64)
 
