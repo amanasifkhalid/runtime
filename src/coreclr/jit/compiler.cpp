@@ -3029,7 +3029,7 @@ void Compiler::compInitOptions(JitFlags* jitFlags)
 #endif
 #endif // DEBUG
 
-    opts.compProcedureSplitting = true;
+    opts.compProcedureSplitting = jitFlags->IsSet(JitFlags::JIT_FLAG_PROCSPLIT) || enableFakeSplitting;
 
 #ifdef FEATURE_CFI_SUPPORT
     // Hot/cold splitting is not being tested on NativeAOT.
@@ -3043,9 +3043,7 @@ void Compiler::compInitOptions(JitFlags* jitFlags)
     opts.compProcedureSplitting = false;
 #endif // TARGET_LOONGARCH64 || TARGET_RISCV64
 
-#ifdef DEBUG
     opts.compProcedureSplittingEH = opts.compProcedureSplitting;
-#endif // DEBUG
 
     if (opts.compProcedureSplitting)
     {
@@ -3074,15 +3072,6 @@ void Compiler::compInitOptions(JitFlags* jitFlags)
                                                            &info.compMethodInfo->args))
         {
             opts.compProcedureSplittingEH = false;
-        }
-
-        // JitForceProcedureSplitting is used to force procedure splitting on checked assemblies.
-        // This is useful for debugging on a checked build.  Note that we still only do procedure
-        // splitting in the zapper.
-        if (JitConfig.JitForceProcedureSplitting().contains(info.compMethodHnd, info.compClassHnd,
-                                                            &info.compMethodInfo->args))
-        {
-            opts.compProcedureSplitting = true;
         }
 #endif
     }

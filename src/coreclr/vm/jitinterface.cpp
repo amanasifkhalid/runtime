@@ -13075,6 +13075,11 @@ static CORJIT_FLAGS GetCompileFlags(PrepareCodeConfig* prepareConfig, MethodDesc
 
 #endif
 
+    if (flags.IsSet(CORJIT_FLAGS::CORJIT_FLAG_BBOPT) /*&& flags.IsSet(CORJIT_FLAGS::CORJIT_FLAG_SPEED_OPT)*/)
+    {
+        flags.Set(CORJIT_FLAGS::CORJIT_FLAG_PROCSPLIT);
+    }
+
     return flags;
 }
 
