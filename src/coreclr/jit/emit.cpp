@@ -7498,7 +7498,7 @@ unsigned emitter::emitEndCodeGen(Compiler*         comp,
 
     if (emitConsDsc.dsdOffs != 0)
     {
-        emitOutputDataSec(&emitConsDsc, consBlock);
+        emitOutputDataSec(&emitConsDsc, consBlockRW);
     }
 
     /* Make sure all GC ref variables are marked as dead */
@@ -8218,7 +8218,7 @@ CORINFO_FIELD_HANDLE emitter::emitSimdMaskConst(simdmask_t constValue)
  *  Output the given data section at the specified address.
  */
 
-void emitter::emitOutputDataSec(dataSecDsc* sec, BYTE* dst)
+void emitter::emitOutputDataSec(dataSecDsc* sec, BYTE* dstRW)
 {
 #ifdef DEBUG
     if (EMITVERBOSE)
@@ -8231,10 +8231,10 @@ void emitter::emitOutputDataSec(dataSecDsc* sec, BYTE* dst)
 
     if (emitComp->opts.disAsm)
     {
-        emitDispDataSec(sec, dst);
+        emitDispDataSec(sec, dstRW);
     }
 
-    assert(dst);
+    assert(dstRW);
     assert(sec->dsdOffs);
     assert(sec->dsdList);
 
@@ -8246,8 +8246,6 @@ void emitter::emitOutputDataSec(dataSecDsc* sec, BYTE* dst)
     for (dsc = sec->dsdList; dsc; dsc = dsc->dsNext)
     {
         size_t dscSize = dsc->dsSize;
-
-        BYTE* dstRW = dst + writeableOffset;
 
         // absolute label table
         if (dsc->dsType == dataSection::blockAbsoluteAddr)
@@ -8339,7 +8337,7 @@ void emitter::emitOutputDataSec(dataSecDsc* sec, BYTE* dst)
         }
 
         curOffs += dscSize;
-        dst += dscSize;
+        dstRW += dscSize;
     }
 }
 

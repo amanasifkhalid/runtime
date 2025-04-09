@@ -3390,7 +3390,7 @@ public:
 
     dataSection* emitDataSecCur;
 
-    void emitOutputDataSec(dataSecDsc* sec, BYTE* dst);
+    void emitOutputDataSec(dataSecDsc* sec, BYTE* dstRW);
     void emitDispDataSec(dataSecDsc* section, BYTE* dst);
 
     /************************************************************************/
