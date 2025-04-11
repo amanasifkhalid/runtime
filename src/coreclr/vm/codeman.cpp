@@ -2799,9 +2799,16 @@ void* EECodeGenManager::allocCodeRaw(CodeHeapRequestInfo *pInfo,
     // Avoid going through the full list in the common case - try to use the most recently used codeheap
     if (pInfo->IsColdCode())
     {
-        _ASSERTE(!pInfo->IsDynamicDomain());
-        pCodeHeap = (HeapList *)pInfo->m_pAllocator->m_pLastUsedColdCodeHeap;
-        pInfo->m_pAllocator->m_pLastUsedColdCodeHeap = NULL;
+        if (pInfo->IsDynamicDomain())
+        {
+            pCodeHeap = (HeapList *)pInfo->m_pAllocator->m_pLastUsedColdDynamicCodeHeap;
+            pInfo->m_pAllocator->m_pLastUsedColdDynamicCodeHeap = NULL;
+        }
+        else
+        {
+            pCodeHeap = (HeapList *)pInfo->m_pAllocator->m_pLastUsedColdCodeHeap;
+            pInfo->m_pAllocator->m_pLastUsedColdCodeHeap = NULL;
+        }
     }
     else if (pInfo->IsDynamicDomain())
     {
@@ -2886,7 +2893,14 @@ void* EECodeGenManager::allocCodeRaw(CodeHeapRequestInfo *pInfo,
 
     if (pInfo->IsColdCode())
     {
-        pInfo->m_pAllocator->m_pLastUsedColdCodeHeap = pCodeHeap;
+        if (pInfo->IsDynamicDomain())
+        {
+            pInfo->m_pAllocator->m_pLastUsedColdDynamicCodeHeap = pCodeHeap;
+        }
+        else
+        {
+            pInfo->m_pAllocator->m_pLastUsedColdCodeHeap = pCodeHeap;
+        }
     }
     else if (pInfo->IsDynamicDomain())
     {
@@ -3037,7 +3051,7 @@ void EECodeGenManager::allocCode(MethodDesc* pMD, size_t blockSize, size_t reser
     // if this is a LCG method then we will be allocating the RealCodeHeader
     // following the code so that the code block can be removed easily by
     // the LCG code heap.
-    if (requestInfo.IsDynamicDomain())
+    if (isDynamic && !isColdCode)
     {
         totalSize = ALIGN_UP(totalSize, sizeof(void*)) + realHeaderSize;
         static_assert_no_msg(CODE_SIZE_ALIGN >= sizeof(void*));
@@ -3077,7 +3091,7 @@ void EECodeGenManager::allocCode(MethodDesc* pMD, size_t blockSize, size_t reser
 
         if (!isColdCode)
         {
-            if (requestInfo.IsDynamicDomain())
+            if (isDynamic)
             {
                 // Set the real code header to the writeable mapping so that we can set its members via the CodeHeader methods below
                 ((CodeHeader*)pCodeHdrRW)->SetRealCodeHeader((BYTE *)(pCodeHdrRW + 1) + ALIGN_UP(blockSize, sizeof(void*)));
@@ -3102,7 +3116,7 @@ void EECodeGenManager::allocCode(MethodDesc* pMD, size_t blockSize, size_t reser
             }
 #endif
 
-            if (requestInfo.IsDynamicDomain())
+            if (isDynamic)
             {
                 *ppRealHeader = (BYTE*)pCode + ALIGN_UP(blockSize, sizeof(void*));
             }

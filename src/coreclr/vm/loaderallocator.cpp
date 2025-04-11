@@ -71,6 +71,7 @@ LoaderAllocator::LoaderAllocator(bool collectible) :
     m_pLastUsedCodeHeap = NULL;
     m_pLastUsedDynamicCodeHeap = NULL;
     m_pLastUsedColdCodeHeap = NULL;
+    m_pLastUsedColdDynamicCodeHeap = NULL;
 #ifdef FEATURE_INTERPRETER
     m_pLastUsedInterpreterCodeHeap = NULL;
     m_pLastUsedInterpreterDynamicCodeHeap = NULL;
