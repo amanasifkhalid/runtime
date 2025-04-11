@@ -13078,6 +13078,7 @@ static CORJIT_FLAGS GetCompileFlags(PrepareCodeConfig* prepareConfig, MethodDesc
     if (flags.IsSet(CORJIT_FLAGS::CORJIT_FLAG_BBOPT) && !ftn->IsLCGMethod() /*&& flags.IsSet(CORJIT_FLAGS::CORJIT_FLAG_SPEED_OPT)*/)
     {
         flags.Set(CORJIT_FLAGS::CORJIT_FLAG_PROCSPLIT);
+        flags.Set(CORJIT_FLAGS::CORJIT_FLAG_RELOC);
     }
 
     return flags;

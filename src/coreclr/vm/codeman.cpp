@@ -2967,26 +2967,44 @@ void EECodeGenManager::allocCode(MethodDesc* pMD, size_t blockSize, size_t reser
     }
 #endif
 
+    constexpr bool isColdCode = std::is_same<TCodeHeader, ColdCodeHeader>::value;
+    bool isDynamic = false;
+    BYTE * loAddr = NULL;
+    BYTE * hiAddr = NULL;
+
+#if defined(FEATURE_JIT_PITCHING)
+    isDynamic = pMD->IsPitchable() && (CLRConfig::GetConfigValue(CLRConfig::INTERNAL_JitPitchMethodSizeThreshold) < blockSize);
+#endif
+
+    if (isColdCode)
+    {
+        // Ensure cold code doesn't share the same OS page as any hot code.
+        LoaderAllocator *pAllocator = pMD->GetLoaderAllocator();
+        HeapList * pHotCodeHeap = (HeapList*)(isDynamic ? pAllocator->m_pLastUsedDynamicCodeHeap : pAllocator->m_pLastUsedCodeHeap);
+        _ASSERTE(pHotCodeHeap != NULL);
+        loAddr = (BYTE*)ROUND_UP_TO_PAGE(pHotCodeHeap->endAddress);
+
+        // We also want to make sure the cold code is within UINT32_MAX bytes of the hot code's base address.
+        // We will store the cold code's unwind info next to the hot code, so we will compute offsets
+        // for the cold code's runtime function entry using the hot code's base address.
+        // The offsets are 32-bit, so the cold code cannot be too far away.
+        hiAddr = (BYTE*)(pHotCodeHeap->GetModuleBase() + UINT32_MAX - blockSize);
+    }
+
+    CodeHeapRequestInfo requestInfo(pMD, NULL, loAddr, hiAddr);
+
+    if (isDynamic)
+    {
+        requestInfo.SetDynamicDomain();
+    }
+
     //
     // Compute header layout
     //
 
     SIZE_T totalSize = blockSize;
-
     TCodeHeader * pCodeHdr = NULL;
     TCodeHeader * pCodeHdrRW = NULL;
-
-    CodeHeapRequestInfo requestInfo(pMD);
-
-    constexpr bool isColdCode = std::is_same<TCodeHeader, ColdCodeHeader>::value;
-
-#if defined(FEATURE_JIT_PITCHING)
-    if (pMD && pMD->IsPitchable() && CLRConfig::GetConfigValue(CLRConfig::INTERNAL_JitPitchMethodSizeThreshold) < blockSize)
-    {
-        requestInfo.SetDynamicDomain();
-    }
-#endif
-
     SIZE_T realHeaderSize;
 #ifdef FEATURE_INTERPRETER
     if (std::is_same<TCodeHeader, InterpreterCodeHeader>::value)
@@ -3144,11 +3162,6 @@ EEJitManager::DomainCodeHeapList *EECodeGenManager::GetCodeHeapList(CodeHeapRequ
         ppList = m_DynamicDomainCodeHeaps.Table();
         count = m_DynamicDomainCodeHeaps.Count();
     }
-    else if (pInfo->IsColdCode())
-    {
-        ppList = m_ColdDomainCodeHeaps.Table();
-        count = m_ColdDomainCodeHeaps.Count();
-    }
     else
     {
         ppList = m_DomainCodeHeaps.Table();
@@ -3262,6 +3275,17 @@ bool EECodeGenManager::CanUseCodeHeap(CodeHeapRequestInfo *pInfo, HeapList *pCod
        }
    }
 
+   if (retVal)
+   {
+       RangeSection * pRS = ExecutionManager::FindCodeRange(pCodeHeap->startAddress, ExecutionManager::GetScanFlags());
+       _ASSERTE(pRS != NULL);
+       bool containsColdCode = pRS->_flags & RangeSection::RANGE_SECTION_COLDCODE;
+       if (containsColdCode != pInfo->IsColdCode())
+       {
+            retVal = false;
+       }
+   }
+
    return retVal;
 }
 
@@ -3279,8 +3303,6 @@ EEJitManager::DomainCodeHeapList * EECodeGenManager::CreateCodeHeapList(CodeHeap
     DomainCodeHeapList **ppList = NULL;
     if (pInfo->IsDynamicDomain())
         ppList = m_DynamicDomainCodeHeaps.AppendThrowing();
-    else if (pInfo->IsColdCode())
-        ppList = m_ColdDomainCodeHeaps.AppendThrowing();
     else
         ppList = m_DomainCodeHeaps.AppendThrowing();
     *ppList = pNewList;
@@ -3681,26 +3703,6 @@ void EECodeGenManager::Unload(LoaderAllocator *pAllocator)
         if (ppList[i]->m_pAllocator== pAllocator) {
             DomainCodeHeapList *pList = ppList[i];
             m_DomainCodeHeaps.DeleteByIndex(i);
-
-            // pHeapList is allocated in pHeap, so only need to delete the LoaderHeap itself
-            count = pList->m_CodeHeapList.Count();
-            for (i=0; i < count; i++) {
-                HeapList *pHeapList = pList->m_CodeHeapList[i];
-                DeleteCodeHeap(pHeapList);
-            }
-
-            // this is ok to do delete as anyone accessing the DomainCodeHeapList structure holds the critical section.
-            delete pList;
-
-            break;
-        }
-    }
-    ppList = m_ColdDomainCodeHeaps.Table();
-    count = m_ColdDomainCodeHeaps.Count();
-    for (int i=0; i < count; i++) {
-        if (ppList[i]->m_pAllocator== pAllocator) {
-            DomainCodeHeapList *pList = ppList[i];
-            m_ColdDomainCodeHeaps.DeleteByIndex(i);
 
             // pHeapList is allocated in pHeap, so only need to delete the LoaderHeap itself
             count = pList->m_CodeHeapList.Count();

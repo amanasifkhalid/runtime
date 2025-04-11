@@ -1928,7 +1928,6 @@ private:
     PTR_HostCodeHeap m_cleanupList;
     // must hold critical section to access this structure.
     CUnorderedArray<DomainCodeHeapList *, 5> m_DomainCodeHeaps;
-    CUnorderedArray<DomainCodeHeapList *, 5> m_ColdDomainCodeHeaps;
     CUnorderedArray<DomainCodeHeapList *, 5> m_DynamicDomainCodeHeaps;
 protected:
     Crst m_CodeHeapCritSec;

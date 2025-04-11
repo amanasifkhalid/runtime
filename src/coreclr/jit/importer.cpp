@@ -12686,7 +12686,7 @@ void Compiler::impFixPredLists()
                 {
                     BasicBlock* const callFinallyRet = callFinally->Next();
                     callFinallyRet->setBBProfileWeight(callFinallyRet->computeIncomingWeight());
-                    profileConsistent &= fgProfileWeightsEqual(callFinally->bbWeight, callFinallyRet->bbWeight);
+                    profileConsistent &= fgProfileWeightsConsistentOrSmall(callFinally->bbWeight, callFinallyRet->bbWeight);
                 }
 
                 if (!profileConsistent)
