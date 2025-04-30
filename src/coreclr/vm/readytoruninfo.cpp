@@ -366,7 +366,7 @@ PTR_MethodDesc ReadyToRunInfo::GetMethodDescForEntryPointInNativeImage(PCODE ent
     }
     CONTRACTL_END;
 
-#if defined(TARGET_AMD64) || (defined(TARGET_X86) && defined(TARGET_UNIX))
+#if defined(TARGET_AMD64) || (defined(TARGET_X86) && defined(FEATURE_EH_FUNCLETS))
     // A normal method entry point is always 8 byte aligned, but a funclet can start at an odd address.
     // Since PtrHashMap can't handle odd pointers, check for this case and return NULL.
     if ((entryPoint & 0x1) != 0)
@@ -969,6 +969,8 @@ static bool SigMatchesMethodDesc(MethodDesc* pMD, SigPointer &sig, ModuleBase * 
 {
     STANDARD_VM_CONTRACT;
 
+    _ASSERTE(!pMD->IsAsyncVariantMethod());
+
     ModuleBase *pOrigModule = pModule;
     ZapSig::Context    zapSigContext(pModule, (void *)pModule, ZapSig::NormalTokens);
     ZapSig::Context *  pZapSigContext = &zapSigContext;
@@ -1077,6 +1079,10 @@ bool ReadyToRunInfo::GetPgoInstrumentationData(MethodDesc * pMD, BYTE** pAllocat
     if (ReadyToRunCodeDisabled())
         return false;
 
+    // TODO: (async) PGO support for async variants
+    if (pMD->IsAsyncVariantMethod())
+        return false;
+
     if (m_pgoInstrumentationDataHashtable.IsNull())
         return false;
 
@@ -1147,6 +1153,10 @@ PCODE ReadyToRunInfo::GetEntryPoint(MethodDesc * pMD, PrepareCodeConfig* pConfig
         goto done;
     // If R2R code is disabled for this module, simply behave as if it is never found
     if (ReadyToRunCodeDisabled())
+        goto done;
+
+    // TODO: (async) R2R support for async variants
+    if (pMD->IsAsyncVariantMethod())
         goto done;
 
     ETW::MethodLog::GetR2RGetEntryPointStart(pMD);

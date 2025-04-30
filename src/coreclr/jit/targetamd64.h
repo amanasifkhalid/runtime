@@ -347,11 +347,11 @@
 
 // Where is the exception object on entry to the handler block?
 #ifdef UNIX_AMD64_ABI
-  #define REG_EXCEPTION_OBJECT     REG_ESI
-  #define RBM_EXCEPTION_OBJECT     RBM_ESI
+  #define REG_EXCEPTION_OBJECT     REG_EDI
+  #define RBM_EXCEPTION_OBJECT     RBM_EDI
 #else // !UNIX_AMD64_ABI
-  #define REG_EXCEPTION_OBJECT     REG_EDX
-  #define RBM_EXCEPTION_OBJECT     RBM_EDX
+  #define REG_EXCEPTION_OBJECT     REG_ECX
+  #define RBM_EXCEPTION_OBJECT     RBM_ECX
 #endif // !UNIX_AMD64_ABI
 
   #define REG_JUMP_THUNK_PARAM     REG_EAX
@@ -539,6 +539,9 @@
   #define RBM_VALIDATE_INDIRECT_CALL_TRASH_ALL (RBM_INT_CALLEE_TRASH_ALL & ~(RBM_R10 | RBM_RCX))
   #define REG_VALIDATE_INDIRECT_CALL_ADDR REG_RCX
   #define REG_DISPATCH_INDIRECT_CALL_ADDR REG_RAX
+
+  #define REG_ASYNC_CONTINUATION_RET REG_RCX
+  #define RBM_ASYNC_CONTINUATION_RET RBM_RCX
 
   // What sort of reloc do we use for [disp32] address mode
   #define IMAGE_REL_BASED_DISP32   IMAGE_REL_BASED_REL32
