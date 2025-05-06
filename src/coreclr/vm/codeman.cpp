@@ -2984,11 +2984,11 @@ void EECodeGenManager::allocCode(MethodDesc* pMD, size_t blockSize, size_t reser
 
     if (isColdCode)
     {
-        // Ensure cold code doesn't share the same OS page as any hot code.
+        // Ensure cold code is placed at a higher address than its corresponding hot code.
         LoaderAllocator *pAllocator = pMD->GetLoaderAllocator();
         HeapList * pHotCodeHeap = (HeapList*)(isDynamic ? pAllocator->m_pLastUsedDynamicCodeHeap : pAllocator->m_pLastUsedCodeHeap);
         _ASSERTE(pHotCodeHeap != NULL);
-        loAddr = (BYTE*)ROUND_UP_TO_PAGE(pHotCodeHeap->endAddress);
+        loAddr = (BYTE*)pHotCodeHeap->endAddress;
 
         // We also want to make sure the cold code is within UINT32_MAX bytes of the hot code's base address.
         // We will store the cold code's unwind info next to the hot code, so we will compute offsets
@@ -4375,10 +4375,12 @@ BOOL EECodeGenManager::JitCodeToMethodInfoWorker(
     {
         pCHdr = (TCodeHeader*)EEJitManager::GetCodeHeader(MethodToken);
     }
+#ifdef FEATURE_INTERPRETER
     else if (std::is_same<TCodeHeader, InterpreterCodeHeader>::value)
     {
         pCHdr = (TCodeHeader*)InterpreterJitManager::GetCodeHeader(MethodToken);
     }
+#endif // FEATURE_INTERPRETER
     else
     {
         return FALSE;
