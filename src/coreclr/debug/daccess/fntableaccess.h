@@ -53,6 +53,7 @@ typedef struct _FakeHpRealCodeHdr
     LPVOID              pCalledMethods;
 #endif
     LPVOID              hdrMDesc;       // changed from MethodDesc*
+    LPVOID              pColdCodeHeader;
     DWORD               nUnwindInfos;
     T_RUNTIME_FUNCTION  unwindInfos[0];
 } FakeRealCodeHeader;
@@ -85,6 +86,7 @@ class CheckDuplicatedStructLayouts
     CHECK_OFFSET(HeapList, pHdrMap);
 
 #if !defined(TARGET_X86)
+    CHECK_OFFSET(RealCodeHeader,    pColdCodeHeader);
     CHECK_OFFSET(RealCodeHeader,    nUnwindInfos);
     CHECK_OFFSET(RealCodeHeader,    unwindInfos);
 #endif  // !TARGET_X86

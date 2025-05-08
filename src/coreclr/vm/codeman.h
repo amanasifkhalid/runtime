@@ -181,6 +181,7 @@ public:
     PTR_MethodDesc      phdrMDesc;
 
 #ifdef FEATURE_EH_FUNCLETS
+    PTR_ColdCodeHeader  pColdCodeHeader;
     DWORD               nUnwindInfos;
     T_RUNTIME_FUNCTION  unwindInfos[0];
 #endif // FEATURE_EH_FUNCLETS
@@ -283,6 +284,16 @@ public:
     }
 
 #if defined(FEATURE_EH_FUNCLETS)
+    PTR_ColdCodeHeader GetColdCodeHeader()
+    {
+        return pRealCodeHeader->pColdCodeHeader;
+    }
+
+    void SetColdCodeHeader(PTR_ColdCodeHeader pColdCodeHeader)
+    {
+        pRealCodeHeader->pColdCodeHeader = pColdCodeHeader;
+    }
+
     UINT                    GetNumberOfUnwindInfos()
     {
         SUPPORTS_DAC;
@@ -2587,17 +2598,18 @@ inline void EEJitManager::JitTokenToMethodRegionInfo(const METHODTOKEN& MethodTo
         PRECONDITION(methodRegionInfo != NULL);
     } CONTRACTL_END;
 
-    methodRegionInfo->hotStartAddress = JitTokenToStartAddress(MethodToken);
+    CodeHeader * pCodeHeader          = GetCodeHeader(MethodToken);
+    methodRegionInfo->hotStartAddress = pCodeHeader->GetCodeStartAddress();
     methodRegionInfo->hotSize         = GetCodeManager()->GetFunctionSize(GetGCInfoToken(MethodToken));
 
 #ifdef FEATURE_EH_FUNCLETS
-    if (MethodToken.IsCold())
+    ColdCodeHeader * pColdCodeHeader = pCodeHeader->GetColdCodeHeader();
+    if (pColdCodeHeader != NULL)
     {
-        CodeHeader * pCodeHeader           = GetCodeHeader(MethodToken);
-        ColdCodeHeader * pColdHeader       = (ColdCodeHeader*)MethodToken.m_pCodeHeader;
-        methodRegionInfo->coldStartAddress = pColdHeader->GetCodeStartAddress();
-
-        TADDR moduleBase = JitTokenToModuleBase(MethodToken);
+        methodRegionInfo->coldStartAddress = pColdCodeHeader->GetCodeStartAddress();
+        RangeSection * pRangeSection = ExecutionManager::FindCodeRange(methodRegionInfo->coldStartAddress, ExecutionManager::GetScanFlags());
+        _ASSERTE(pRangeSection != NULL);
+        TADDR moduleBase = pRangeSection->_range.RangeStart();
         UINT unwindInfos = pCodeHeader->GetNumberOfUnwindInfos();
         _ASSERTE(unwindInfos > 1);
         methodRegionInfo->coldSize = RUNTIME_FUNCTION__EndAddress(pCodeHeader->GetUnwindInfo(unwindInfos - 1), moduleBase)

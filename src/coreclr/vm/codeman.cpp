@@ -3105,6 +3105,7 @@ void EECodeGenManager::allocCode(MethodDesc* pMD, size_t blockSize, size_t reser
             if (std::is_same<TCodeHeader, CodeHeader>::value)
             {
                 ((CodeHeader*)pCodeHdrRW)->SetNumberOfUnwindInfos(nUnwindInfos);
+                ((CodeHeader*)pCodeHdrRW)->SetColdCodeHeader(NULL);
             }
 #endif
 

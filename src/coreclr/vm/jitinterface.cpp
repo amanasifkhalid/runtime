@@ -12605,22 +12605,23 @@ void CEEJitInfo::allocMem (AllocMemArgs *pArgs)
     m_moduleBase = m_pCodeHeap->GetModuleBase();
 #endif
 
+#ifdef FEATURE_EH_FUNCLETS
     if (coldCodeSize > 0)
     {
         m_jitManager->allocCode<ColdCodeHeader>(m_pMethodBeingCompiled, coldAllocSize.Value(), 0, (CorJitAllocMemFlag)0, &m_ColdCodeHeader, &m_ColdCodeHeaderRW, &m_coldCodeWriteBufferSize, &m_pColdCodeHeap
-                                            , NULL
-#ifdef FEATURE_EH_FUNCLETS
-                                            , 0
-#endif
-                                            );
+                                            , NULL, 0);
 
         _ASSERTE(m_coldCodeWriteBufferSize == (coldAllocSize.Value() + sizeof(ColdCodeHeader)));
-        ((ColdCodeHeader*)m_ColdCodeHeaderRW)->pCodeHeader = m_CodeHeader;
+        ColdCodeHeader* pColdCodeHeader = (ColdCodeHeader*)m_ColdCodeHeader;
+        ColdCodeHeader* pColdCodeHeaderRW = (ColdCodeHeader*)m_ColdCodeHeaderRW;
+        pArgs->coldCodeBlock = (BYTE*)pColdCodeHeader->GetCodeStartAddress();
+        pArgs->coldCodeBlockRW = (BYTE*)pColdCodeHeaderRW->GetCodeStartAddress();
 
-        pArgs->coldCodeBlock = (BYTE*)((ColdCodeHeader*)m_ColdCodeHeader)->GetCodeStartAddress();
-        pArgs->coldCodeBlockRW = (BYTE*)((ColdCodeHeader*)m_ColdCodeHeaderRW)->GetCodeStartAddress();
+        pColdCodeHeaderRW->pCodeHeader = m_CodeHeader;
+        ((CodeHeader*)m_CodeHeaderRW)->SetColdCodeHeader(pColdCodeHeader);
     }
     else
+#endif
     {
         pArgs->coldCodeBlock = NULL;
         pArgs->coldCodeBlockRW = NULL;
