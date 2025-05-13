@@ -11,13 +11,5 @@ inline BOOL ExecutionManager::IsCollectibleMethod(const METHODTOKEN& MethodToken
 
 inline TADDR IJitManager::JitTokenToModuleBase(const METHODTOKEN& MethodToken)
 {
-    if (MethodToken.IsCold())
-    {
-        ColdCodeHeader * pColdCodeHeader = (ColdCodeHeader*)MethodToken.m_pCodeHeader;
-        CodeHeader * pCodeHeader = (CodeHeader*)pColdCodeHeader->pCodeHeader;
-        RangeSection* pHotRangeSection = ExecutionManager::FindCodeRange(pCodeHeader->GetCodeStartAddress(), ExecutionManager::GetScanFlags());
-        return pHotRangeSection->_range.RangeStart();
-    }
-
     return MethodToken.m_pRangeSection->_range.RangeStart();
 }

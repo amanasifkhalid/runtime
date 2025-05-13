@@ -12561,12 +12561,12 @@ void CEEJitInfo::allocMem (AllocMemArgs *pArgs)
 #endif
 
 #ifdef FEATURE_EH_FUNCLETS
-    if (coldCodeSize > 0)
+    if (pArgs->coldCodeSize > 0)
     {
-        m_jitManager->allocCode<ColdCodeHeader>(m_pMethodBeingCompiled, coldAllocSize.Value(), 0, (CorJitAllocMemFlag)0, &m_ColdCodeHeader, &m_ColdCodeHeaderRW, &m_coldCodeWriteBufferSize, &m_pColdCodeHeap
+        m_jitManager->allocCode<ColdCodeHeader>(m_pMethodBeingCompiled, pArgs->coldCodeSize, 0, (CorJitAllocMemFlag)0, &m_ColdCodeHeader, &m_ColdCodeHeaderRW, &m_coldCodeWriteBufferSize, &m_pColdCodeHeap
                                             , NULL, 0);
 
-        _ASSERTE(m_coldCodeWriteBufferSize == (coldAllocSize.Value() + sizeof(ColdCodeHeader)));
+        _ASSERTE(m_coldCodeWriteBufferSize == (pArgs->coldCodeSize + sizeof(ColdCodeHeader)));
         ColdCodeHeader* pColdCodeHeader = (ColdCodeHeader*)m_ColdCodeHeader;
         ColdCodeHeader* pColdCodeHeaderRW = (ColdCodeHeader*)m_ColdCodeHeaderRW;
         pArgs->coldCodeBlock = (BYTE*)pColdCodeHeader->GetCodeStartAddress();
