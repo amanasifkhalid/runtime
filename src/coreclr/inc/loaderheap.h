@@ -602,7 +602,7 @@ private:
     PTR_BYTE            m_pTopAllocPtr;
 
     // Points to the end of the committed region in the current block
-    PTR_BYTE            m_pPtrToEndOfCommittedRegion;
+    PTR_BYTE            m_ptrEndLowerCommittedRegion;
     PTR_BYTE            m_pBeginUpperCommittedRegion;
     PTR_BYTE            m_pEndReservedRegion;
 

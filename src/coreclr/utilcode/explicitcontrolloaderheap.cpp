@@ -60,7 +60,7 @@ ExplicitControlLoaderHeap::ExplicitControlLoaderHeap(bool fMakeExecutable) :
     }
     CONTRACTL_END;
 
-    m_pPtrToEndOfCommittedRegion = NULL;
+    m_ptrEndLowerCommittedRegion = NULL;
     m_pBeginUpperCommittedRegion = NULL;
     m_pEndReservedRegion         = NULL;
     m_pAllocPtr                  = NULL;
@@ -125,9 +125,9 @@ size_t ExplicitControlLoaderHeap::GetBytesAvailCommittedRegion(bool useLowerRegi
 {
     LIMITED_METHOD_CONTRACT;
 
-    if (useLowerRegion && (m_pAllocPtr < m_pPtrToEndOfCommittedRegion))
+    if (useLowerRegion && (m_pAllocPtr < m_ptrEndLowerCommittedRegion))
     {
-        return (size_t)(m_pPtrToEndOfCommittedRegion - m_pAllocPtr);
+        return (size_t)(m_ptrEndLowerCommittedRegion - m_pAllocPtr);
     }
     else if (!useLowerRegion && (m_pBeginUpperCommittedRegion < m_pTopAllocPtr))
     {
@@ -147,9 +147,9 @@ size_t ExplicitControlLoaderHeap::GetBytesAvailReservedRegion(bool useLowerRegio
     {
         return (size_t)(m_pBeginUpperCommittedRegion - m_pAllocPtr);
     }
-    else if (!useLowerRegion && (m_pPtrToEndOfCommittedRegion < m_pTopAllocPtr))
+    else if (!useLowerRegion && (m_ptrEndLowerCommittedRegion < m_pTopAllocPtr))
     {
-        return (size_t)(m_pTopAllocPtr - m_pPtrToEndOfCommittedRegion);
+        return (size_t)(m_pTopAllocPtr - m_ptrEndLowerCommittedRegion);
     }
     else
     {
@@ -245,7 +245,7 @@ BOOL ExplicitControlLoaderHeap::ReservePages(size_t dwSizeToCommit)
     // Add to the linked list
     m_pFirstBlock = pNewBlock;
 
-    m_pPtrToEndOfCommittedRegion = (BYTE *) (pData) + (dwSizeToCommit);
+    m_ptrEndLowerCommittedRegion = (BYTE *) (pData) + (dwSizeToCommit);
     m_pAllocPtr                  = (BYTE *) (pData);
     m_pEndReservedRegion         = (BYTE *) (pData) + (dwSizeToReserve);
     m_pTopAllocPtr               = m_pEndReservedRegion;
@@ -274,14 +274,14 @@ BOOL ExplicitControlLoaderHeap::GetMoreCommittedPages(size_t dwMinSize, bool use
     if (useLowerRegion)
     {
         pBeginFree = m_pAllocPtr;
-        pEndFree   = m_pPtrToEndOfCommittedRegion;
+        pEndFree   = m_ptrEndLowerCommittedRegion;
         reservedSize = m_pBeginUpperCommittedRegion - pBeginFree;
     }
     else
     {
         pBeginFree = m_pBeginUpperCommittedRegion;
         pEndFree   = m_pTopAllocPtr;
-        reservedSize = pEndFree - m_pPtrToEndOfCommittedRegion;
+        reservedSize = pEndFree - m_ptrEndLowerCommittedRegion;
     }
 
     // If we have memory we can use, what are you doing here!
@@ -294,7 +294,7 @@ BOOL ExplicitControlLoaderHeap::GetMoreCommittedPages(size_t dwMinSize, bool use
 
         if (dwSizeToCommit < m_dwCommitBlockSize)
         {
-            size_t uncommittedSize = (size_t)(m_pBeginUpperCommittedRegion - m_pPtrToEndOfCommittedRegion);
+            size_t uncommittedSize = (size_t)(m_pBeginUpperCommittedRegion - m_ptrEndLowerCommittedRegion);
             dwSizeToCommit = min(uncommittedSize, (size_t)m_dwCommitBlockSize);
         }
 
@@ -318,7 +318,7 @@ BOOL ExplicitControlLoaderHeap::GetMoreCommittedPages(size_t dwMinSize, bool use
 
         if (useLowerRegion)
         {
-            m_pPtrToEndOfCommittedRegion += dwSizeToCommit;
+            m_ptrEndLowerCommittedRegion += dwSizeToCommit;
         }
         else
         {
