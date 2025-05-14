@@ -344,7 +344,7 @@ BOOL ExplicitControlLoaderHeap::GetMoreCommittedPages(size_t dwMinSize, bool use
     return ReservePages(dwMinSize);
 }
 
-void *ExplicitControlLoaderHeap::AllocMemForCode_NoThrow(size_t dwHeaderSize, size_t dwCodeSize, DWORD dwCodeAlignment, size_t dwReserveForJumpStubs)
+void *ExplicitControlLoaderHeap::AllocMemForCode_NoThrow(size_t dwHeaderSize, size_t dwCodeSize, DWORD dwCodeAlignment, size_t dwReserveForJumpStubs, bool useLowerRegion /* = true */)
 {
     CONTRACT(void*)
     {
@@ -355,8 +355,6 @@ void *ExplicitControlLoaderHeap::AllocMemForCode_NoThrow(size_t dwHeaderSize, si
         POSTCONDITION(CheckPointer(RETVAL, NULL_OK));
     }
     CONTRACT_END;
-
-    bool useLowerRegion = true;
 
     INCONTRACT(_ASSERTE(!ARE_FAULTS_FORBIDDEN()));
 

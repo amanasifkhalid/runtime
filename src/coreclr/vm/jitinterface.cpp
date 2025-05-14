@@ -11026,10 +11026,10 @@ void CEEJitInfo::WriteCode(EECodeGenManager * jitMgr)
     if (m_ColdCodeHeader != NULL)
     {
         ColdCodeHeader* pColdCodeHeader = (ColdCodeHeader*)m_ColdCodeHeader;
-        m_jitManager->NibbleMapSet(m_pColdCodeHeap, pColdCodeHeader->GetCodeStartAddress(), m_coldCodeWriteBufferSize - sizeof(ColdCodeHeader));
+        m_jitManager->NibbleMapSet(m_pCodeHeap, pColdCodeHeader->GetCodeStartAddress(), m_coldCodeWriteBufferSize - sizeof(ColdCodeHeader));
     }
 
-#if defined(TARGET_AMD64)
+#ifdef TARGET_AMD64
     // Publish the new unwind information in a way that the ETW stack crawler can find
     _ASSERTE(m_usedUnwindInfos == m_totalUnwindInfos);
     UnwindInfoTable::PublishUnwindInfoForMethod(m_moduleBase, ((CodeHeader*)m_CodeHeader)->GetUnwindInfo(0), m_totalUnwindInfos);
@@ -11209,8 +11209,9 @@ void CInterpreterJitInfo::allocMem(AllocMemArgs *pArgs)
             pArgs->hotCodeSize, pArgs->roDataSize, totalSize.Value(), pArgs->flag, GetClrInstanceId());
     }
 
-    m_jitManager->allocCode<InterpreterCodeHeader>(m_pMethodBeingCompiled, totalSize.Value(), 0, pArgs->flag, &m_CodeHeader, &m_CodeHeaderRW, &m_codeWriteBufferSize, &m_pCodeHeap
-                                                 , &m_pRealCodeHeader
+    m_jitManager->allocCode<InterpreterCodeHeader>(m_pMethodBeingCompiled, totalSize.Value(), 0, 0, pArgs->flag,
+                                                   &m_CodeHeader, &m_CodeHeaderRW, NULL, NULL,
+                                                   &m_codeWriteBufferSize, NULL, &m_pCodeHeap, &m_pRealCodeHeader
 #ifdef FEATURE_EH_FUNCLETS
                                                  , 0
 #endif
@@ -11546,7 +11547,6 @@ void CEEJitInfo::allocUnwindInfo (
 
     // Make sure that the RUNTIME_FUNCTION is aligned on a DWORD sized boundary
     _ASSERTE(IS_ALIGNED(pRuntimeFunction, sizeof(DWORD)));
-
 
     size_t writeableOffset = (BYTE *)m_CodeHeaderRW - (BYTE *)m_CodeHeader;
     UNWIND_INFO * pUnwindInfo = (UNWIND_INFO *) &(m_theUnwindBlock[m_usedUnwindSize]);
@@ -12472,11 +12472,12 @@ void CEEJitInfo::allocMem (AllocMemArgs *pArgs)
 
     JIT_TO_EE_TRANSITION();
 
-    ULONG codeSize      = pArgs->hotCodeSize;
+    ULONG hotCodeSize   = pArgs->hotCodeSize;
+    ULONG coldCodeSize  = pArgs->coldCodeSize;
     void **codeBlock    = &pArgs->hotCodeBlock;
     void **codeBlockRW  = &pArgs->hotCodeBlockRW;
 
-    S_SIZE_T totalSize = S_SIZE_T(codeSize);
+    S_SIZE_T hotAllocSize = S_SIZE_T(hotCodeSize);
 
     size_t roDataAlignment = sizeof(void*);
     if ((pArgs->flag & CORJIT_ALLOCMEM_FLG_RODATA_64BYTE_ALIGN)!= 0)
@@ -12507,17 +12508,17 @@ void CEEJitInfo::allocMem (AllocMemArgs *pArgs)
         {
             codeAlignment = 16;
         }
-        totalSize.AlignUp(codeAlignment);
+        hotAllocSize.AlignUp(codeAlignment);
         if (roDataAlignment > codeAlignment) {
             // Add padding to align read-only data.
-            totalSize += (roDataAlignment - codeAlignment);
+            hotAllocSize += (roDataAlignment - codeAlignment);
         }
-        totalSize += pArgs->roDataSize;
+        hotAllocSize += pArgs->roDataSize;
     }
 
 #ifdef FEATURE_EH_FUNCLETS
-    totalSize.AlignUp(sizeof(DWORD));
-    totalSize += m_totalUnwindSize;
+    hotAllocSize.AlignUp(sizeof(DWORD));
+    hotAllocSize += m_totalUnwindSize;
 #endif
 
     _ASSERTE(m_CodeHeader == 0 &&
@@ -12528,7 +12529,7 @@ void CEEJitInfo::allocMem (AllocMemArgs *pArgs)
             // since this should happen very rarely.
             "Note that this may fire if the JITCompiler tries to recompile a method");
 
-    if( totalSize.IsOverflow() )
+    if( hotAllocSize.IsOverflow() )
     {
         COMPlusThrowHR(CORJIT_OUTOFMEM);
     }
@@ -12546,11 +12547,12 @@ void CEEJitInfo::allocMem (AllocMemArgs *pArgs)
         }
 
         FireEtwMethodJitMemoryAllocatedForCode(ullMethodIdentifier, ullModuleID,
-            pArgs->hotCodeSize + pArgs->coldCodeSize, pArgs->roDataSize, totalSize.Value(), pArgs->flag, GetClrInstanceId());
+            hotCodeSize + coldCodeSize, pArgs->roDataSize, hotAllocSize.Value() + coldCodeSize, pArgs->flag, GetClrInstanceId());
     }
 
-    m_jitManager->allocCode<CodeHeader>(m_pMethodBeingCompiled, totalSize.Value(), GetReserveForJumpStubs(), pArgs->flag, &m_CodeHeader, &m_CodeHeaderRW, &m_codeWriteBufferSize, &m_pCodeHeap
-                                      , &m_pRealCodeHeader
+    m_jitManager->allocCode<CodeHeader>(m_pMethodBeingCompiled, hotAllocSize.Value(), coldCodeSize, GetReserveForJumpStubs(), pArgs->flag,
+                                        &m_CodeHeader, &m_CodeHeaderRW, &m_ColdCodeHeader, &m_ColdCodeHeaderRW,
+                                        &m_codeWriteBufferSize, &m_coldCodeWriteBufferSize, &m_pCodeHeap, &m_pRealCodeHeader
 #ifdef FEATURE_EH_FUNCLETS
                                       , m_totalUnwindInfos
 #endif
@@ -12558,27 +12560,17 @@ void CEEJitInfo::allocMem (AllocMemArgs *pArgs)
 
 #ifdef FEATURE_EH_FUNCLETS
     m_moduleBase = m_pCodeHeap->GetModuleBase();
-#endif
-
-#ifdef FEATURE_EH_FUNCLETS
     if (pArgs->coldCodeSize > 0)
     {
-        m_jitManager->allocCode<ColdCodeHeader>(m_pMethodBeingCompiled, pArgs->coldCodeSize, 0, (CorJitAllocMemFlag)0, &m_ColdCodeHeader, &m_ColdCodeHeaderRW, &m_coldCodeWriteBufferSize, &m_pColdCodeHeap
-                                            , NULL, 0);
-
-        _ASSERTE(m_coldCodeWriteBufferSize == (pArgs->coldCodeSize + sizeof(ColdCodeHeader)));
-        ColdCodeHeader* pColdCodeHeader = (ColdCodeHeader*)m_ColdCodeHeader;
+        ColdCodeHeader* pColdCodeHeader   = (ColdCodeHeader*)m_ColdCodeHeader;
         ColdCodeHeader* pColdCodeHeaderRW = (ColdCodeHeader*)m_ColdCodeHeaderRW;
-        pArgs->coldCodeBlock = (BYTE*)pColdCodeHeader->GetCodeStartAddress();
-        pArgs->coldCodeBlockRW = (BYTE*)pColdCodeHeaderRW->GetCodeStartAddress();
-
-        pColdCodeHeaderRW->pCodeHeader = m_CodeHeader;
-        ((CodeHeader*)m_CodeHeaderRW)->SetColdCodeHeader(pColdCodeHeader);
+        pArgs->coldCodeBlock              = (BYTE*)pColdCodeHeader->GetCodeStartAddress();
+        pArgs->coldCodeBlockRW            = (BYTE*)pColdCodeHeaderRW->GetCodeStartAddress();
     }
     else
-#endif
+#endif // FEATURE_EH_FUNCLETS
     {
-        pArgs->coldCodeBlock = NULL;
+        pArgs->coldCodeBlock   = NULL;
         pArgs->coldCodeBlockRW = NULL;
     }
 
@@ -12609,10 +12601,10 @@ void CEEJitInfo::allocMem (AllocMemArgs *pArgs)
     current += m_totalUnwindSize;
 #endif
 
-    _ASSERTE((SIZE_T)(current - (BYTE *)((CodeHeader*)m_CodeHeader)->GetCodeStartAddress()) <= totalSize.Value());
+    _ASSERTE((SIZE_T)(current - (BYTE *)((CodeHeader*)m_CodeHeader)->GetCodeStartAddress()) <= hotAllocSize.Value());
 
 #ifdef _DEBUG
-    m_codeSize = codeSize + pArgs->coldCodeSize;
+    m_codeSize = hotCodeSize + coldCodeSize;
 #endif  // _DEBUG
 
     EE_TO_JIT_TRANSITION();

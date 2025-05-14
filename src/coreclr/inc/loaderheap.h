@@ -596,7 +596,7 @@ class ExplicitControlLoaderHeap : public UnlockedLoaderHeapBaseTraversable
     friend class ClrDataAccess;
 #endif
 
-private:
+public:
     // Allocation pointer in current block
     PTR_BYTE            m_pAllocPtr;
     PTR_BYTE            m_pTopAllocPtr;
@@ -683,7 +683,7 @@ public:
 
 public:
 
-    void *AllocMemForCode_NoThrow(size_t dwHeaderSize, size_t dwCodeSize, DWORD dwCodeAlignment, size_t dwReserveForJumpStubs);
+    void *AllocMemForCode_NoThrow(size_t dwHeaderSize, size_t dwCodeSize, DWORD dwCodeAlignment, size_t dwReserveForJumpStubs, bool useLowerRegion = true);
 
     void SetReservedRegion(BYTE* dwReservedRegionAddress, SIZE_T dwReservedRegionSize, BOOL fReleaseMemory);
 };

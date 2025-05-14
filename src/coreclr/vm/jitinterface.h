@@ -793,7 +793,6 @@ public:
         m_ColdCodeHeader = NULL;
         m_ColdCodeHeaderRW = NULL;
         m_coldCodeWriteBufferSize = 0;
-        m_pColdCodeHeap = NULL;
 
 #ifdef FEATURE_ON_STACK_REPLACEMENT
         if (m_pPatchpointInfoFromJit != NULL)
@@ -892,7 +891,6 @@ public:
         : CEECodeGenInfo(fd, header, jm, allowInlining)
         , m_ColdCodeHeader(NULL),
           m_ColdCodeHeaderRW(NULL),
-          m_pColdCodeHeap(NULL),
           m_coldCodeWriteBufferSize(0)
 #ifdef FEATURE_EH_FUNCLETS
         , m_moduleBase(0),
@@ -993,7 +991,6 @@ protected :
     // Members needed for hot/cold splitting
     void*                   m_ColdCodeHeader;   // descriptor for cold JITTED code - read/execute address
     void*                   m_ColdCodeHeaderRW; // descriptor for cold JITTED code - code write scratch buffer address
-    HeapList*               m_pColdCodeHeap;
     size_t                  m_coldCodeWriteBufferSize;
 
 #ifdef FEATURE_EH_FUNCLETS

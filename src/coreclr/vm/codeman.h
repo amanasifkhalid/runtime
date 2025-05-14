@@ -336,6 +336,8 @@ struct ColdCodeHeader
     }
 };
 
+static_assert_no_msg(sizeof(CodeHeader) == sizeof(ColdCodeHeader));
+
 typedef DPTR(RealCodeHeader) PTR_RealCodeHeader;
 typedef DPTR(InterpreterRealCodeHeader) PTR_InterpreterRealCodeHeader;
 
@@ -443,7 +445,6 @@ struct CodeHeapRequestInfo
     bool         m_isCollectible;
     bool         m_isInterpreted;
     bool         m_throwOnOutOfMemoryWithinRange;
-    bool         m_isColdCode;
 
     bool   IsDynamicDomain()                    { return m_isDynamicDomain;    }
     void   SetDynamicDomain()                   { m_isDynamicDomain = true;    }
@@ -465,9 +466,6 @@ struct CodeHeapRequestInfo
     bool   getThrowOnOutOfMemoryWithinRange()   { return m_throwOnOutOfMemoryWithinRange; }
     void   setThrowOnOutOfMemoryWithinRange(bool value) { m_throwOnOutOfMemoryWithinRange = value; }
 
-    bool   IsColdCode()                         { return m_isColdCode; }
-    void   SetColdCode()                        { m_isColdCode = true; }
-
     void   Init();
 
     CodeHeapRequestInfo(MethodDesc *pMD)
@@ -475,7 +473,6 @@ struct CodeHeapRequestInfo
           m_loAddr(0), m_hiAddr(0),
           m_requestSize(0), m_reserveSize(0), m_reserveForJumpStubs(0)
         , m_isInterpreted(false), m_throwOnOutOfMemoryWithinRange(false)
-        , m_isColdCode(false)
     { WRAPPER_NO_CONTRACT;   Init(); }
 
     CodeHeapRequestInfo(MethodDesc *pMD, LoaderAllocator* pAllocator,
@@ -484,7 +481,6 @@ struct CodeHeapRequestInfo
           m_loAddr(loAddr), m_hiAddr(hiAddr),
           m_requestSize(0), m_reserveSize(0), m_reserveForJumpStubs(0)
         , m_isInterpreted(false), m_throwOnOutOfMemoryWithinRange(false)
-        , m_isColdCode(false)
     { WRAPPER_NO_CONTRACT;   Init(); }
 };
 
@@ -526,7 +522,7 @@ public:
 
     // Alloc the specified numbers of bytes for code. Returns NULL if the request does not fit
     // Space for header is reserved immediately before. It is not included in size.
-    virtual void* AllocMemForCode_NoThrow(size_t header, size_t size, DWORD alignment, size_t reserveForJumpStubs) = 0;
+    virtual void* AllocMemForCode_NoThrow(size_t header, size_t size, DWORD alignment, size_t reserveForJumpStubs, bool useLowerRegion = true) = 0;
 
 #ifdef DACCESS_COMPILE
     virtual void EnumMemoryRegions(CLRDataEnumMemoryFlags flags) = 0;
@@ -554,12 +550,13 @@ struct HeapList
     PTR_CodeHeap        pHeap;
 
     TADDR               startAddress;
-    TADDR               endAddress;     // the current end of the used portion of the Heap
+    TADDR               bottomEndAddress; // the current end (exclusive) of the bottom used portion of the Heap
+    TADDR               topStartAddress;  // the current start (inclusive) to the top used portion of the Heap
 
-    TADDR               mapBase;        // "startAddress" rounded down to GetOsPageSize(). pHdrMap is relative to this address
-    PTR_DWORD           pHdrMap;        // bit array used to find the start of methods
+    TADDR               mapBase; // "startAddress" rounded down to GetOsPageSize(). pHdrMap is relative to this address
+    PTR_DWORD           pHdrMap; // bit array used to find the start of methods
 
-    size_t              maxCodeHeapSize;// Size of the entire contiguous block of memory
+    size_t              maxCodeHeapSize;     // Size of the entire contiguous block of memory
     size_t              reserveForJumpStubs; // Amount of memory reserved for jump stubs in this block
 
     PTR_LoaderAllocator pLoaderAllocator; // LoaderAllocator of HeapList
@@ -599,7 +596,7 @@ class LoaderCodeHeap : CodeHeap
 
     VPTR_VTABLE_CLASS(LoaderCodeHeap, CodeHeap)
 
-private:
+public:
     ExplicitControlLoaderHeap m_LoaderHeap;
     SSIZE_T m_cbMinNextPad;
 
@@ -616,7 +613,7 @@ public:
         WRAPPER_NO_CONTRACT;
     }
 
-    virtual void* AllocMemForCode_NoThrow(size_t header, size_t size, DWORD alignment, size_t reserveForJumpStubs) DAC_EMPTY_RET(NULL);
+    virtual void* AllocMemForCode_NoThrow(size_t header, size_t size, DWORD alignment, size_t reserveForJumpStubs, bool useLowerRegion = true) DAC_EMPTY_RET(NULL);
 
 #ifdef DACCESS_COMPILE
     virtual void EnumMemoryRegions(CLRDataEnumMemoryFlags flags)
@@ -751,7 +748,6 @@ struct RangeSection
         RANGE_SECTION_CODEHEAP      = 0x2,
         RANGE_SECTION_RANGELIST     = 0x4,
         RANGE_SECTION_INTERPRETER   = 0x8,
-        RANGE_SECTION_COLDCODE      = 0x10,
     };
 
 #ifdef FEATURE_READYTORUN
@@ -1912,8 +1908,9 @@ public:
     void CleanupCodeHeaps();
 
     template<typename TCodeHeader>
-    void allocCode(MethodDesc* pMD, size_t blockSize, size_t reserveForJumpStubs, CorJitAllocMemFlag flag, void** ppCodeHeader, void** ppCodeHeaderRW,
-                   size_t* pAllocatedSize, HeapList** ppCodeHeap , BYTE** ppRealHeader
+    void allocCode(MethodDesc* pMD, size_t hotBlockSize, size_t coldBlockSize, size_t reserveForJumpStubs, CorJitAllocMemFlag flag,
+                   void** ppCodeHeader, void** ppCodeHeaderRW, void** ppColdCodeHeader, void** ppColdCodeHeaderRW,
+                   size_t* pAllocatedHotSize, size_t* pAllocatedColdSize, HeapList** ppCodeHeap , BYTE** ppRealHeader
 #ifdef FEATURE_EH_FUNCLETS
                  , UINT nUnwindInfos
 #endif
@@ -1937,7 +1934,8 @@ public:
     bool CanUseCodeHeap(CodeHeapRequestInfo *pInfo, HeapList *pCodeHeap);
 
 protected:
-    void* allocCodeRaw(CodeHeapRequestInfo *pInfo, size_t header, size_t blockSize, unsigned align, HeapList ** ppCodeHeap);
+    void allocCodeRaw(CodeHeapRequestInfo *pInfo, size_t header, size_t hotCodeSize, size_t coldCodeSize, unsigned align,
+                      HeapList ** ppCodeHeap, void** ppHotCode, void** ppColdCode);
     virtual void UnpublishUnwindInfoForMethod(TADDR codeStart) = 0;
     virtual void DeleteFunctionTable(PVOID pvTableID) = 0;
 
@@ -2551,7 +2549,10 @@ struct cdac_data<ExecutionManager>
 
 inline BOOL METHODTOKEN::IsCold() const
 {
-    return m_pRangeSection->_flags & RangeSection::RANGE_SECTION_COLDCODE;
+    _ASSERTE((m_pRangeSection->_flags & RangeSection::RANGE_SECTION_CODEHEAP) != 0);
+    PTR_HeapList pHp = m_pRangeSection->_pHeapList;
+    _ASSERTE(pHp != NULL);
+    return m_pCodeHeader >= pHp->bottomEndAddress;
 }
 
 inline CodeHeader * EEJitManager::GetCodeHeader(const METHODTOKEN& MethodToken)
