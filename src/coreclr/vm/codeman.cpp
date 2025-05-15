@@ -2568,7 +2568,7 @@ void * LoaderCodeHeap::AllocMemForCode_NoThrow(size_t header, size_t size, DWORD
         GC_NOTRIGGER;
     } CONTRACTL_END;
 
-    if (m_cbMinNextPad > (SSIZE_T)header) header = m_cbMinNextPad;
+    if (useLowerRegion && (m_cbMinNextPad > (SSIZE_T)header)) header = m_cbMinNextPad;
 
     void * p = m_LoaderHeap.AllocMemForCode_NoThrow(header, size, alignment, reserveForJumpStubs, useLowerRegion);
     if (p == NULL)
@@ -2576,7 +2576,7 @@ void * LoaderCodeHeap::AllocMemForCode_NoThrow(size_t header, size_t size, DWORD
 
     // If the next allocation would have started in the same nibble map entry, allocate extra space to prevent it from happening
     // Note that m_cbMinNextPad can be negative
-    m_cbMinNextPad = ALIGN_UP((SIZE_T)p + 1, BYTES_PER_BUCKET) - ((SIZE_T)p + size);
+    if (useLowerRegion) m_cbMinNextPad = ALIGN_UP((SIZE_T)p + 1, BYTES_PER_BUCKET) - ((SIZE_T)p + size);
 
     return p;
 }
@@ -2776,7 +2776,15 @@ void EECodeGenManager::allocCodeRaw(CodeHeapRequestInfo *pInfo, size_t header, s
         PRECONDITION(m_CodeHeapCritSec.OwnedByCurrentThread());
     } CONTRACT_END;
 
-    pInfo->setRequestSize(header+hotCodeSize+coldCodeSize+(align-1)+pInfo->getReserveForJumpStubs());
+    constexpr size_t coldHeaderSize = sizeof(ColdCodeHeader);
+    constexpr DWORD coldAlignSize   = BYTES_PER_BUCKET;
+    size_t requestSize = header + hotCodeSize + (align - 1) + pInfo->getReserveForJumpStubs();
+    if (coldCodeSize > 0)
+    {
+        requestSize += coldCodeSize + coldHeaderSize + (coldAlignSize - 1);
+    }
+
+    pInfo->setRequestSize(requestSize);
 
     void *     pHotCode       = NULL;
     void *     pColdCode      = NULL;
@@ -2815,12 +2823,14 @@ void EECodeGenManager::allocCodeRaw(CodeHeapRequestInfo *pInfo, size_t header, s
         }
     }
 
+    size_t coldHeaderSizePlusPadding;
     auto allocMem = [&](CodeHeap* pHeap) {
         pHotCode = pHeap->AllocMemForCode_NoThrow(header, hotCodeSize, align, pInfo->getReserveForJumpStubs());
         _ASSERTE(pHotCode != NULL);
         if (coldCodeSize > 0)
         {
-            pColdCode = pHeap->AllocMemForCode_NoThrow(header, coldCodeSize, align, pInfo->getReserveForJumpStubs()/*, false*/);
+            coldHeaderSizePlusPadding = max((SSIZE_T)coldHeaderSize, ((LoaderCodeHeap*)pHeap)->m_cbMinNextPad);
+            pColdCode = pHeap->AllocMemForCode_NoThrow(coldHeaderSize, coldCodeSize, coldAlignSize, 0, false);
             _ASSERTE(pColdCode != NULL);
         }
     };
@@ -2919,7 +2929,7 @@ void EECodeGenManager::allocCodeRaw(CodeHeapRequestInfo *pInfo, size_t header, s
 
         if ((TADDR)pColdCode < (TADDR)pCodeHeap->topStartAddress)
         {
-            pCodeHeap->topStartAddress = (TADDR)pColdCode - header;
+            pCodeHeap->topStartAddress = (TADDR)pColdCode - coldHeaderSizePlusPadding;
         }
     }
 
