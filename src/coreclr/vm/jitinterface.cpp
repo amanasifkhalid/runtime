@@ -11575,8 +11575,9 @@ void CEEJitInfo::allocUnwindInfo (
 
     /* Calculate Image Relative offset to add to the jit generated unwind offsets */
 
-    _ASSERTE((pColdCode == NULL) || ((TADDR)pColdCode > (TADDR)pHotCode));
     TADDR baseAddress = m_moduleBase;
+    _ASSERTE((TADDR)pHotCode > baseAddress);
+    _ASSERTE((pColdCode == NULL) || ((TADDR)pColdCode > baseAddress));
 
     size_t currentCodeSizeT = (size_t)(((pColdCode == NULL) ? pHotCode : pColdCode) - baseAddress);
 

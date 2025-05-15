@@ -2823,15 +2823,16 @@ void EECodeGenManager::allocCodeRaw(CodeHeapRequestInfo *pInfo, size_t header, s
         }
     }
 
-    size_t coldHeaderSizePlusPadding;
     auto allocMem = [&](CodeHeap* pHeap) {
         pHotCode = pHeap->AllocMemForCode_NoThrow(header, hotCodeSize, align, pInfo->getReserveForJumpStubs());
-        _ASSERTE(pHotCode != NULL);
-        if (coldCodeSize > 0)
+        if ((pHotCode != NULL) && (coldCodeSize > 0))
         {
-            coldHeaderSizePlusPadding = max((SSIZE_T)coldHeaderSize, ((LoaderCodeHeap*)pHeap)->m_cbMinNextPad);
             pColdCode = pHeap->AllocMemForCode_NoThrow(coldHeaderSize, coldCodeSize, coldAlignSize, 0, false);
-            _ASSERTE(pColdCode != NULL);
+            if (pColdCode == NULL)
+            {
+                // If only the cold allocation failed for some reason, redo the hot allocation as well
+                pHotCode = NULL;
+            }
         }
     };
 
@@ -2929,7 +2930,7 @@ void EECodeGenManager::allocCodeRaw(CodeHeapRequestInfo *pInfo, size_t header, s
 
         if ((TADDR)pColdCode < (TADDR)pCodeHeap->topStartAddress)
         {
-            pCodeHeap->topStartAddress = (TADDR)pColdCode - coldHeaderSizePlusPadding;
+            pCodeHeap->topStartAddress = (TADDR)pColdCode - header;
         }
     }
 
