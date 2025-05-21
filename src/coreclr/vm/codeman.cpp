@@ -2677,7 +2677,12 @@ HeapList* EECodeGenManager::NewCodeHeap(CodeHeapRequestInfo *pInfo, DomainCodeHe
 
     DWORD flags = RangeSection::RANGE_SECTION_CODEHEAP;
 
-    if (pInfo->IsInterpreted())
+    if (pInfo->IsOptimizedCode())
+    {
+        _ASSERTE(!pInfo->IsInterpreted());
+        flags |= RangeSection::RANGE_SECTION_OPTIMIZEDCODE;
+    }
+    else if (pInfo->IsInterpreted())
     {
         flags |= RangeSection::RANGE_SECTION_INTERPRETER;
     }
@@ -2784,6 +2789,12 @@ void* EECodeGenManager::allocCodeRaw(CodeHeapRequestInfo *pInfo,
         }
         else
 #endif // FEATURE_INTERPRETER
+        // if (pInfo->IsOptimizedCode())
+        // {
+        //     pCodeHeap = (HeapList *)pInfo->m_pAllocator->m_pLastUsedDynamicOptimizedCodeHeap;
+        //     pInfo->m_pAllocator->m_pLastUsedDynamicOptimizedCodeHeap = NULL;
+        // }
+        // else
         {
             pCodeHeap = (HeapList *)pInfo->m_pAllocator->m_pLastUsedDynamicCodeHeap;
             pInfo->m_pAllocator->m_pLastUsedDynamicCodeHeap = NULL;
@@ -2799,6 +2810,12 @@ void* EECodeGenManager::allocCodeRaw(CodeHeapRequestInfo *pInfo,
         }
         else
 #endif // FEATURE_INTERPRETER
+        if (pInfo->IsOptimizedCode())
+        {
+            pCodeHeap = (HeapList *)pInfo->m_pAllocator->m_pLastUsedOptimizedCodeHeap;
+            pInfo->m_pAllocator->m_pLastUsedOptimizedCodeHeap = NULL;
+        }
+        else
         {
             pCodeHeap = (HeapList *)pInfo->m_pAllocator->m_pLastUsedCodeHeap;
             pInfo->m_pAllocator->m_pLastUsedCodeHeap = NULL;
@@ -2864,6 +2881,11 @@ void* EECodeGenManager::allocCodeRaw(CodeHeapRequestInfo *pInfo,
         }
         else
 #endif // FEATURE_INTERPRETER
+        // if (pInfo->IsOptimizedCode())
+        // {
+        //     pInfo->m_pAllocator->m_pLastUsedDynamicOptimizedCodeHeap = pCodeHeap;
+        // }
+        // else
         {
             pInfo->m_pAllocator->m_pLastUsedDynamicCodeHeap = pCodeHeap;
         }
@@ -2877,6 +2899,11 @@ void* EECodeGenManager::allocCodeRaw(CodeHeapRequestInfo *pInfo,
         }
         else
 #endif // FEATURE_INTERPRETER
+        if (pInfo->IsOptimizedCode())
+        {
+            pInfo->m_pAllocator->m_pLastUsedOptimizedCodeHeap = pCodeHeap;
+        }
+        else
         {
             pInfo->m_pAllocator->m_pLastUsedCodeHeap = pCodeHeap;
         }
@@ -2981,6 +3008,11 @@ void EECodeGenManager::allocCode(MethodDesc* pMD, size_t blockSize, size_t reser
     {
         totalSize = ALIGN_UP(totalSize, sizeof(void*)) + realHeaderSize;
         static_assert_no_msg(CODE_SIZE_ALIGN >= sizeof(void*));
+    }
+
+    if (!pMD->IsJitOptimizationDisabled())
+    {
+        requestInfo.SetOptimizedCode();
     }
 
     // Scope the lock
@@ -3203,6 +3235,17 @@ bool EECodeGenManager::CanUseCodeHeap(CodeHeapRequestInfo *pInfo, HeapList *pCod
             }
        }
    }
+
+    if (retVal)
+    {
+        const RangeSection* pRS = ExecutionManager::FindCodeRange(pCodeHeap->startAddress, ExecutionManager::GetScanFlags());
+        _ASSERTE(pRS != NULL);
+        const bool isOptimizedCode = (pRS->_flags & RangeSection::RANGE_SECTION_OPTIMIZEDCODE) != 0;
+        if (isOptimizedCode != pInfo->IsOptimizedCode())
+        {
+            return false;
+        }
+    }
 
    return retVal;
 }

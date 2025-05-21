@@ -420,14 +420,18 @@ struct CodeHeapRequestInfo
     bool         m_isCollectible;
     bool         m_isInterpreted;
     bool         m_throwOnOutOfMemoryWithinRange;
+    bool         m_isOptimizedCode;
 
     bool   IsDynamicDomain()                    { return m_isDynamicDomain;    }
     void   SetDynamicDomain()                   { m_isDynamicDomain = true;    }
 
     bool   IsCollectible()                      { return m_isCollectible;      }
 
-    bool   IsInterpreted()                      { return m_isInterpreted;       }
+    bool   IsInterpreted()                      { return m_isInterpreted;      }
     void   SetInterpreted()                     { m_isInterpreted = true;      }
+
+    bool   IsOptimizedCode()                    { return m_isOptimizedCode;    }
+    void   SetOptimizedCode()                   { m_isOptimizedCode = true;    }
 
     size_t getRequestSize()                     { return m_requestSize;        }
     void   setRequestSize(size_t requestSize)   { m_requestSize = requestSize; }
@@ -447,7 +451,7 @@ struct CodeHeapRequestInfo
         : m_pMD(pMD), m_pAllocator(0),
           m_loAddr(0), m_hiAddr(0),
           m_requestSize(0), m_reserveSize(0), m_reserveForJumpStubs(0)
-        , m_isInterpreted(false)
+        , m_isInterpreted(false), m_isOptimizedCode(false)
     { WRAPPER_NO_CONTRACT;   Init(); }
 
     CodeHeapRequestInfo(MethodDesc *pMD, LoaderAllocator* pAllocator,
@@ -455,7 +459,7 @@ struct CodeHeapRequestInfo
         : m_pMD(pMD), m_pAllocator(pAllocator),
           m_loAddr(loAddr), m_hiAddr(hiAddr),
           m_requestSize(0), m_reserveSize(0), m_reserveForJumpStubs(0)
-        , m_isInterpreted(false)
+        , m_isInterpreted(false), m_isOptimizedCode(false)
     { WRAPPER_NO_CONTRACT;   Init(); }
 };
 
@@ -722,6 +726,7 @@ struct RangeSection
         RANGE_SECTION_CODEHEAP      = 0x2,
         RANGE_SECTION_RANGELIST     = 0x4,
         RANGE_SECTION_INTERPRETER   = 0x8,
+        RANGE_SECTION_OPTIMIZEDCODE = 0x10,
     };
 
 #ifdef FEATURE_READYTORUN
