@@ -7,6 +7,27 @@ using Internal.TypeSystem;
 
 namespace Internal.IL
 {
+    internal sealed class VerificationException : Exception
+    {
+        public VerificationException()
+        {
+        }
+    }
+
+    internal sealed class LocalVerificationException : Exception
+    {
+        public LocalVerificationException()
+        {
+        }
+    }
+
+    internal sealed class VerifierException : Exception
+    {
+        internal VerifierException(string message) : base(message)
+        {
+        }
+    }
+
     internal sealed partial class ILImporter
     {
         private BasicBlock[] _basicBlocks; // Maps IL offset to basic block
@@ -296,9 +317,17 @@ namespace Internal.IL
                 BasicBlock basicBlock = _pendingBasicBlocks;
                 _pendingBasicBlocks = basicBlock.Next;
 
-                StartImportingBasicBlock(basicBlock);
-                ImportBasicBlock(basicBlock);
-                EndImportingBasicBlock(basicBlock);
+                try
+                {
+                    StartImportingBasicBlock(basicBlock);
+                    ImportBasicBlock(basicBlock);
+                    EndImportingBasicBlock(basicBlock);
+                }
+                catch (LocalVerificationException)
+                {
+                    // Basic block verification was aborted.
+                    // Continue to the next block.
+                }
             }
         }
 

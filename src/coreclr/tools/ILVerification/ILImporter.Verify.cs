@@ -13,27 +13,6 @@ using ILVerify;
 
 namespace Internal.IL
 {
-    class VerificationException : Exception
-    {
-        public VerificationException()
-        {
-        }
-    }
-
-    class LocalVerificationException : VerificationException
-    {
-        public LocalVerificationException()
-        {
-        }
-    }
-
-    class VerifierException : Exception
-    {
-        internal VerifierException(string message) : base(message)
-        {
-        }
-    }
-
     partial class ILImporter
     {
         readonly MethodDesc _method;
