@@ -2322,11 +2322,7 @@ bool Compiler::fgNormalizeEHCase1()
             eh->ebdHndBeg = newHndStart;
 
             // Try index is the same as the enclosing try, if any, of eh:
-            if (eh->ebdEnclosingTryIndex == EHblkDsc::NO_ENCLOSING_INDEX)
-            {
-                newHndStart->clearTryIndex();
-            }
-            else
+            if (eh->ebdEnclosingTryIndex != EHblkDsc::NO_ENCLOSING_INDEX)
             {
                 newHndStart->setTryIndex(eh->ebdEnclosingTryIndex);
             }
@@ -2960,11 +2956,7 @@ bool Compiler::fgNormalizeEHCase3()
                     {
                         ehOuter->ebdTryLast = newLast;
                         newLast->setTryIndex(ehOuterIndex);
-                        if (nextHndIndex == EHblkDsc::NO_ENCLOSING_INDEX)
-                        {
-                            newLast->clearHndIndex();
-                        }
-                        else
+                        if (nextHndIndex != EHblkDsc::NO_ENCLOSING_INDEX)
                         {
                             newLast->setHndIndex(nextHndIndex);
                         }
@@ -2972,11 +2964,7 @@ bool Compiler::fgNormalizeEHCase3()
                     else
                     {
                         ehOuter->ebdHndLast = newLast;
-                        if (nextTryIndex == EHblkDsc::NO_ENCLOSING_INDEX)
-                        {
-                            newLast->clearTryIndex();
-                        }
-                        else
+                        if (nextTryIndex != EHblkDsc::NO_ENCLOSING_INDEX)
                         {
                             newLast->setTryIndex(nextTryIndex);
                         }

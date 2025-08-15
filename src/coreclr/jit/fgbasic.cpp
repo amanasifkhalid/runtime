@@ -5605,12 +5605,6 @@ BasicBlock* Compiler::fgNewBBbefore(BBKinds jumpKind, BasicBlock* block, bool ex
     {
         fgExtendEHRegionBefore(block);
     }
-    else
-    {
-        // When extendRegion is false the caller is responsible for setting these two values
-        newBlk->setTryIndex(MAX_XCPTN_INDEX); // Note: this is still a legal index, just unlikely
-        newBlk->setHndIndex(MAX_XCPTN_INDEX); // Note: this is still a legal index, just unlikely
-    }
 
     // We assume that if the block we are inserting before is in the cold region, then this new
     // block will also be in the cold region.
@@ -5638,12 +5632,6 @@ BasicBlock* Compiler::fgNewBBafter(BBKinds jumpKind, BasicBlock* block, bool ext
     if (extendRegion)
     {
         fgExtendEHRegionAfter(block);
-    }
-    else
-    {
-        // When extendRegion is false the caller is responsible for setting these two values
-        newBlk->setTryIndex(MAX_XCPTN_INDEX); // Note: this is still a legal index, just unlikely
-        newBlk->setHndIndex(MAX_XCPTN_INDEX); // Note: this is still a legal index, just unlikely
     }
 
     // If the new block is in the cold region (because the block we are inserting after

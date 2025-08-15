@@ -657,8 +657,6 @@ PhaseStatus AsyncTransformation::Run()
     // Due to a hard cap on epilogs we need a shared return here.
     m_sharedReturnBB = m_comp->fgNewBBafter(BBJ_RETURN, m_comp->fgLastBBInMainFunction(), false);
     m_sharedReturnBB->bbSetRunRarely();
-    m_sharedReturnBB->clearTryIndex();
-    m_sharedReturnBB->clearHndIndex();
 
     if (m_comp->fgIsUsingProfileWeights())
     {
@@ -1270,8 +1268,6 @@ BasicBlock* AsyncTransformation::CreateSuspension(
     }
 
     BasicBlock* suspendBB = m_comp->fgNewBBafter(BBJ_RETURN, m_lastSuspensionBB, false);
-    suspendBB->clearTryIndex();
-    suspendBB->clearHndIndex();
     suspendBB->inheritWeightPercentage(block, 0);
     m_lastSuspensionBB = suspendBB;
 
@@ -1727,14 +1723,12 @@ BasicBlock* AsyncTransformation::CreateResumption(BasicBlock*               bloc
         m_lastResumptionBB = m_comp->fgLastBBInMainFunction();
     }
 
-    BasicBlock* resumeBB      = m_comp->fgNewBBafter(BBJ_ALWAYS, m_lastResumptionBB, true);
+    BasicBlock* resumeBB      = m_comp->fgNewBBafter(BBJ_ALWAYS, m_lastResumptionBB, false);
     FlowEdge*   remainderEdge = m_comp->fgAddRefPred(remainder, resumeBB);
 
     resumeBB->bbSetRunRarely();
     resumeBB->CopyFlags(remainder, BBF_PROF_WEIGHT);
     resumeBB->SetTargetEdge(remainderEdge);
-    resumeBB->clearTryIndex();
-    resumeBB->clearHndIndex();
     resumeBB->SetFlags(BBF_ASYNC_RESUMPTION);
     m_lastResumptionBB = resumeBB;
 
@@ -2449,8 +2443,6 @@ void AsyncTransformation::CreateResumptionSwitch()
         // If we have patchpoints then first check if we need to resume in the OSR version.
         BasicBlock* callHelperBB = m_comp->fgNewBBafter(BBJ_THROW, m_comp->fgLastBBInMainFunction(), false);
         callHelperBB->bbSetRunRarely();
-        callHelperBB->clearTryIndex();
-        callHelperBB->clearHndIndex();
 
         JITDUMP("    Created " FMT_BB " for transitions back into OSR method\n", callHelperBB->bbNum);
 

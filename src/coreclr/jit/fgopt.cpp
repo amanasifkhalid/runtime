@@ -503,7 +503,6 @@ PhaseStatus Compiler::fgPostImportationCleanup()
                         // and so likewise the old and new try region entries.
                         assert(!oldTryEntry->hasHndIndex());
                         newTryEntry->setTryIndex(XTnum);
-                        newTryEntry->clearHndIndex();
                         fgInsertBBafter(tryEntryPrev, newTryEntry);
 
                         // Generally this (unreachable) empty new try entry block can fall through

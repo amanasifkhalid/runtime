@@ -1493,7 +1493,7 @@ void Compiler::fgAddSyncMethodEnterExit()
         tryBegBB->setTryIndex(XTnew);
         tryBegBB->clearHndIndex();
 
-        faultBB->clearTryIndex();
+        assert(!faultBB->hasTryIndex());
         faultBB->setHndIndex(XTnew);
 
         // Walk the user code blocks and set all blocks that don't already have a try handler
