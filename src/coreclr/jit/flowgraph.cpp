@@ -2019,7 +2019,8 @@ private:
     //
     BasicBlock* CreateReturnBB(unsigned index, GenTreeIntConCommon* returnConst = nullptr)
     {
-        BasicBlock* newReturnBB = comp->fgNewBBinRegion(BBJ_RETURN);
+        assert(!comp->fgFuncletsCreated);
+        BasicBlock* newReturnBB = comp->fgNewBBafter(BBJ_RETURN, comp->fgLastBB, /* extendRegion */ false);
         comp->fgReturnCount++;
 
         noway_assert(newReturnBB->IsLast());

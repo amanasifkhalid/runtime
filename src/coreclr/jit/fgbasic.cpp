@@ -6258,23 +6258,6 @@ BasicBlock* Compiler::fgNewBBinRegion(BBKinds     jumpKind,
 }
 
 //------------------------------------------------------------------------
-// Creates a new BasicBlock and inserts it at the end of the function.
-//
-// See the implementation of fgNewBBinRegion() used by this one for more notes.
-//
-// Arguments:
-//    jumpKind - the jump kind of the new block to create.
-//
-// Return Value:
-//    The new block.
-
-BasicBlock* Compiler::fgNewBBinRegion(BBKinds jumpKind)
-{
-    return fgNewBBinRegion(jumpKind, 0, 0, nullptr, /* putInFilter */ false, /* runRarely */ false,
-                           /* insertAtEnd */ true);
-}
-
-//------------------------------------------------------------------------
 // Creates a new BasicBlock, and inserts it after 'afterBlk'.
 //
 // The block cannot be inserted into a more nested try/handler region than that specified by 'regionIndex'.
